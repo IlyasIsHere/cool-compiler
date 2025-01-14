@@ -64,7 +64,7 @@ func (p *Parser) peekError(t lexer.TokenType) {
 }
 
 func (p *Parser) currentError(t lexer.TokenType) {
-	p.errors = append(p.errors, fmt.Sprintf("Expected current token to be %v, got %v line %d col %d", t, p.curToken.Type, p.peekToken.Line, p.peekToken.Column))
+	p.errors = append(p.errors, fmt.Sprintf("Expected current token to be %v, got %v line %d col %d", t, p.curToken.Type, p.curToken.Line, p.curToken.Column))
 }
 
 func (p *Parser) ParseProgram() *ast.Program {
@@ -88,7 +88,8 @@ func (p *Parser) ParseClass() *ast.Class {
 	}
 
 	if !p.curTokenIs(lexer.TYPEID) {
-		// Add errors
+
+		// Add errors TODO:
 		return nil
 	}
 
