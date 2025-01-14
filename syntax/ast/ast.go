@@ -56,16 +56,28 @@ type Attribute struct {
 	Token lexer.Token
 	Name  *ObjectIdentifier
 	Type  *TypeIdentifier
+	// TODO: Init: what type should it be?
 }
 
 func (a *Attribute) TokenLiteral() string { return a.Token.Literal }
 func (a *Attribute) featureNode()         {}
 
 type Method struct {
+	Token   lexer.Token
+	Name    *ObjectIdentifier
+	Type    *TypeIdentifier
+	Formals []Formal
+}
+
+func (m *Method) TokenLiteral() string { return m.Token.Literal }
+func (m *Method) featureNode()         {}
+
+type Formal struct {
 	Token lexer.Token
 	Name  *ObjectIdentifier
 	Type  *TypeIdentifier
 }
 
-func (m *Method) TokenLiteral() string { return m.Token.Literal }
-func (m *Method) featureNode()         {}
+func (f *Formal) TokenLiteral() string { return f.Token.Literal }
+
+// TODO: should it follow other interfaces?

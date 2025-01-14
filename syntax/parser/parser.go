@@ -88,8 +88,8 @@ func (p *Parser) ParseClass() *ast.Class {
 	}
 
 	if !p.curTokenIs(lexer.TYPEID) {
-
 		// Add errors TODO:
+		p.currentError(lexer.TYPEID)
 		return nil
 	}
 
@@ -118,4 +118,98 @@ func (p *Parser) parseFeature() ast.Feature {
 		return p.parseMethod()
 	}
 	return p.parseAttribute()
+}
+
+func (p *Parser) parseMethod() *ast.Method {
+	method := &ast.Method{Token: p.curToken}
+
+	if !p.curTokenIs(lexer.OBJECTID) {
+		p.currentError(lexer.OBJECTID)
+		return nil
+	}
+	name := &ast.ObjectIdentifier{
+		Token: p.curToken,
+		Value: p.curToken.Literal,
+	}
+	method.Name = name
+
+	if !p.expectAndPeek(lexer.LPAREN) {
+		return nil
+	}
+
+	for !p.peekTokenIs(lexer.RPAREN) {
+		p.nextToken()
+		// TODO: parse formals
+	}
+
+	if !p.expectAndPeek(lexer.RPAREN) && !p.expectAndPeek(lexer.COLON) {
+		return nil
+	}
+
+	if !p.peekTokenIs(lexer.TYPEID) {
+		p.peekError(lexer.TYPEID)
+		return nil
+	}
+	typeid := &ast.TypeIdentifier{
+		Token: p.peekToken,
+		Value: p.peekToken.Literal,
+	}
+	method.Type = typeid
+
+	p.nextToken()
+	p.nextToken()
+
+	if !p.expectCurrent(lexer.LBRACE) {
+		return nil
+	}
+	// TODO: method.body = p.parseExpression()
+
+	if !p.expectAndPeek(lexer.RBRACE) {
+		return nil
+	}
+	return method
+}
+
+func (p *Parser) parseAttribute() *ast.Attribute {
+	attr := &ast.Attribute{
+		Token: p.curToken,
+	}
+
+	if !p.curTokenIs(lexer.OBJECTID) {
+		p.currentError(lexer.OBJECTID)
+		return nil
+	}
+	name := &ast.ObjectIdentifier{
+		Token: p.curToken,
+		Value: p.curToken.Literal,
+	}
+	attr.Name = name
+
+	if !p.expectAndPeek(lexer.COLON) {
+		return nil
+	}
+
+	p.nextToken()
+	if !p.curTokenIs(lexer.TYPEID) {
+		p.currentError(lexer.TYPEID)
+		return nil
+	}
+	typeid := &ast.TypeIdentifier{
+		Token: p.curToken,
+		Value: p.curToken.Literal,
+	}
+	attr.Type = typeid
+
+	p.nextToken()
+
+	if p.curTokenIs(lexer.SEMI) {
+		p.nextToken()
+		return attr
+	}
+
+	if !p.expectCurrent(lexer.ASSIGN) {
+		return nil
+	}
+	// TODO: attr.Init = p.parseExpression()
+
 }
