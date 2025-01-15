@@ -75,6 +75,7 @@ func (p *Parser) ParseProgram() *ast.Program {
 		if !p.expectAndPeek(lexer.SEMI) {
 			continue
 		}
+		p.nextToken()
 		prog.Classes = append(prog.Classes, c)
 	}
 	return prog
