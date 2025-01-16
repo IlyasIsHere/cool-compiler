@@ -8,11 +8,6 @@ type Node interface {
 	TokenLiteral() string
 }
 
-type Statement interface {
-	Node
-	statementNode()
-}
-
 type Expression interface {
 	Node
 	expressionNode()
@@ -46,17 +41,17 @@ func (p *Program) TokenLiteral() string { return "" }
 
 type Class struct {
 	Token    lexer.Token
-	Name     string
+	Name     *TypeIdentifier
 	Features []Feature
 }
 
 func (c *Class) TokenLiteral() string { return c.Token.Literal }
 
 type Attribute struct {
-	Token lexer.Token
-	Name  *ObjectIdentifier
-	Type  *TypeIdentifier
-	// TODO: Init: what type should it be?
+	Token      lexer.Token
+	Identifier *ObjectIdentifier
+	Type       *TypeIdentifier
+	Init       Expression
 }
 
 func (a *Attribute) TokenLiteral() string { return a.Token.Literal }
@@ -80,4 +75,97 @@ type Formal struct {
 
 func (f *Formal) TokenLiteral() string { return f.Token.Literal }
 
-// TODO: should it follow other interfaces?
+type IntegerLiteral struct {
+	Token lexer.Token
+	Value int
+}
+
+func (il *IntegerLiteral) TokenLiteral() string { return il.Token.Literal }
+func (il *IntegerLiteral) expressionNode()      {}
+
+type StringLiteral struct {
+	Token lexer.Token
+	Value string
+}
+
+func (sl *StringLiteral) TokenLiteral() string { return sl.Token.Literal }
+func (sl *StringLiteral) expressionNode()      {}
+
+type BooleanLiteral struct {
+	Token lexer.Token
+	Value bool
+}
+
+func (bl *BooleanLiteral) TokenLiteral() string { return bl.Token.Literal }
+func (bl *BooleanLiteral) expressionNode()      {}
+
+type IfExpression struct {
+	Token       lexer.Token
+	Condition   Expression
+	Consequence Expression
+	Alternative Expression
+}
+
+func (ifexp *IfExpression) TokenLiteral() string { return ifexp.Token.Literal }
+func (ifexp *IfExpression) expressionNode()      {}
+
+type WhileExpression struct {
+	Token     lexer.Token
+	Condition Expression
+	Body      Expression
+}
+
+func (wexp *WhileExpression) TokenLiteral() string { return wexp.Token.Literal }
+func (wexp *WhileExpression) expressionNode()      {}
+
+type BlockExpression struct {
+	Token       lexer.Token
+	Expressions []Expression
+}
+
+func (bexp *BlockExpression) TokenLiteral() string { return bexp.Token.Literal }
+func (bexp *BlockExpression) expressionNode()      {}
+
+type LetExpression struct {
+	Token    lexer.Token
+	Bindings []Attribute
+	In       Expression
+}
+
+func (lexp *LetExpression) TokenLiteral() string { return lexp.Token.Literal }
+func (lexp *LetExpression) expressionNode()      {}
+
+type NewExpression struct {
+	Token lexer.Token
+	Type  *TypeIdentifier
+}
+
+func (nexp *NewExpression) TokenLiteral() string { return nexp.Token.Literal }
+func (nexp *NewExpression) expressionNode()      {}
+
+type IsVoidExpression struct {
+	Token      lexer.Token
+	Expression Expression
+}
+
+func (ivexpr *IsVoidExpression) TokenLiteral() string { return ivexpr.Token.Literal }
+func (ivexpr *IsVoidExpression) expressionNode()      {}
+
+type UnaryExpression struct {
+	Token    lexer.Token
+	Operator string
+	Right    Expression
+}
+
+func (unaryexpr *UnaryExpression) TokenLiteral() string { return unaryexpr.Token.Literal }
+func (unaryexpr *UnaryExpression) expressionNode()      {}
+
+type BinaryExpression struct {
+	Token    lexer.Token
+	Operator string
+	Right    Expression
+	Left     Expression
+}
+
+func (binexp *BinaryExpression) TokenLiteral() string { return binexp.Token.Literal }
+func (binexp *BinaryExpression) expressionNode()      {}

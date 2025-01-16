@@ -63,7 +63,7 @@ func (sa *SemanticAnalyser) Analyze(program *ast.Program) {
 func (sa *SemanticAnalyser) typeCheck(program *ast.Program) {
 	for _, class := range program.Classes {
 		st := sa.globalSymbolTable.symbols[class.Name.Value].Scope
-		sa.typeCheckClass(&class, st)
+		sa.typeCheckClass(class, st)
 	}
 }
 
@@ -96,7 +96,7 @@ func (sa *SemanticAnalyser) typeCheckMethod(method *ast.Method, st *SymbolTable)
 			continue
 		}
 
-		methodSt.parent.AddEntry(formal.Name.Value, &SymbolEntry{Token: formal.Token, Type: formal.TypeDecl.Value})
+		methodSt.AddEntry(formal.Name.Value, &SymbolEntry{Token: formal.Token, Type: formal.TypeDecl.Value})
 	}
 
 	methodExpressionType := sa.getExpressionType(method.Expression, methodSt)
@@ -156,6 +156,8 @@ func (sa *SemanticAnalyser) getWhileExpressionType(wexpr *ast.WhileExpression, s
 func (sa *SemanticAnalyser) getBlockExpressionType(bexpr *ast.BlockExpression, st *SymbolTable) string {
 	lastType := ""
 	for _, expression := range bexpr.Expressions {
+		switch expression.(type)
+		// TODO: check type for block expressions (for example an assignment with a block expression in the method itself)
 		lastType = sa.getExpressionType(expression, st)
 	}
 
@@ -171,6 +173,8 @@ func (sa *SemanticAnalyser) getIfExpressionType(ifexpr *ast.IfExpression, st *Sy
 
 	constype := sa.getExpressionType(ifexpr.Consequence, st)
 	alttype := sa.getExpressionType(ifexpr.Alternative, st)
+
+	// TODO: LCA to know which type to return
 
 	if constype != alttype {
 		sa.errors = append(sa.errors, fmt.Sprintf("ambiguous if statement return type %s vs %s", constype, alttype))
@@ -211,6 +215,13 @@ func (sa *SemanticAnalyser) buildSymboltables(program *ast.Program) {
 				classEntry.Scope.AddEntry(f.Name.Value, &SymbolEntry{Token: f.Name.Token, AttrType: f.TypeDecl})
 			case *ast.Method:
 				methodST := NewSymbolTable(classEntry.Scope)
+
+				// TODO: handle duplicates
+				// To check
+				if _, ok := classEntry.Scope.Lookup(f.Name.Value); ok {
+					sa.errors = append(sa.errors, fmt.Sprintf("method %s is already defined in class %s", f.Name.Value, class.Name.Value))
+					continue
+				}
 				classEntry.Scope.AddEntry(f.Name.Value, &SymbolEntry{Token: f.Name.Token, Scope: methodST, Method: f})
 			}
 		}
