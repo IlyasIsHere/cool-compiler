@@ -43,34 +43,36 @@ type Class struct {
 	Token    lexer.Token
 	Name     *TypeIdentifier
 	Features []Feature
+	Parent   *TypeIdentifier
 }
 
 func (c *Class) TokenLiteral() string { return c.Token.Literal }
 
 type Attribute struct {
 	Token      lexer.Token
-	Identifier *ObjectIdentifier
-	Type       *TypeIdentifier
-	Init       Expression
+	Name       *ObjectIdentifier
+	TypeDecl   *TypeIdentifier
+	Expression Expression
 }
 
 func (a *Attribute) TokenLiteral() string { return a.Token.Literal }
 func (a *Attribute) featureNode()         {}
 
 type Method struct {
-	Token   lexer.Token
-	Name    *ObjectIdentifier
-	Type    *TypeIdentifier
-	Formals []Formal
+	Token      lexer.Token
+	Name       *ObjectIdentifier
+	TypeDecl   *TypeIdentifier
+	Formals    []Formal
+	Expression Expression
 }
 
 func (m *Method) TokenLiteral() string { return m.Token.Literal }
 func (m *Method) featureNode()         {}
 
 type Formal struct {
-	Token lexer.Token
-	Name  *ObjectIdentifier
-	Type  *TypeIdentifier
+	Token    lexer.Token
+	Name     *ObjectIdentifier
+	TypeDecl *TypeIdentifier
 }
 
 func (f *Formal) TokenLiteral() string { return f.Token.Literal }
@@ -126,9 +128,18 @@ type BlockExpression struct {
 func (bexp *BlockExpression) TokenLiteral() string { return bexp.Token.Literal }
 func (bexp *BlockExpression) expressionNode()      {}
 
+type Binding struct {
+	Token      lexer.Token
+	Identifier *ObjectIdentifier
+	Type       *TypeIdentifier
+	Init       Expression
+}
+
+func (b *Binding) TokenLiteral() string { return b.Token.Literal }
+
 type LetExpression struct {
 	Token    lexer.Token
-	Bindings []Attribute
+	Bindings []*Binding
 	In       Expression
 }
 
@@ -169,3 +180,28 @@ type BinaryExpression struct {
 
 func (binexp *BinaryExpression) TokenLiteral() string { return binexp.Token.Literal }
 func (binexp *BinaryExpression) expressionNode()      {}
+
+type CaseExpression struct {
+	Token      lexer.Token
+	Expression Expression
+	Branches   []CaseBranch
+}
+
+func (caseexp *CaseExpression) TokenLiteral() string { return caseexp.Token.Literal }
+func (caseexp *CaseExpression) expressionNode()      {}
+
+type CaseBranch struct {
+	Token      lexer.Token
+	Identifier *ObjectIdentifier
+	Type       *TypeIdentifier
+	Expression Expression
+}
+
+type Assignment struct {
+	Token      lexer.Token
+	Identifier *ObjectIdentifier
+	Expression Expression
+}
+
+func (a *Assignment) TokenLiteral() string { return a.Token.Literal }
+func (a *Assignment) expressionNode()      {}

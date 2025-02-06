@@ -89,14 +89,31 @@ func (p *Parser) ParseClass() *ast.Class {
 	}
 
 	if !p.curTokenIs(lexer.TYPEID) {
-		// Add errors TODO:
 		p.currentError(lexer.TYPEID)
 		return nil
 	}
 
-	c.Name = p.curToken.Literal
-	if !p.expectAndPeek(lexer.LBRACE) {
-		return nil
+	c.Name = &ast.TypeIdentifier{
+		Token: p.curToken,
+		Value: p.curToken.Literal,
+	}
+
+	// Doing: handle inheritance
+	if p.peekTokenIs(lexer.INHERITS) {
+		p.nextToken()
+
+		if !p.peekTokenIs(lexer.TYPEID) {
+			p.peekError(lexer.TYPEID)
+			return nil
+		}
+		p.nextToken()
+
+		// TODO:
+		c.Parent = &ast.TypeIdentifier{
+			Token: p.curToken,
+			Value: p.curToken.Literal,
+		}
+
 	}
 
 	for !p.peekTokenIs(lexer.RBRACE) {
@@ -155,7 +172,7 @@ func (p *Parser) parseMethod() *ast.Method {
 		Token: p.peekToken,
 		Value: p.peekToken.Literal,
 	}
-	method.Type = typeid
+	method.TypeDecl = typeid
 
 	p.nextToken()
 	p.nextToken()
@@ -199,7 +216,7 @@ func (p *Parser) parseAttribute() *ast.Attribute {
 		Token: p.curToken,
 		Value: p.curToken.Literal,
 	}
-	attr.Type = typeid
+	attr.TypeDecl = typeid
 
 	p.nextToken()
 
@@ -211,6 +228,6 @@ func (p *Parser) parseAttribute() *ast.Attribute {
 	if !p.expectCurrent(lexer.ASSIGN) {
 		return nil
 	}
-	// TODO: attr.Init = p.parseExpression()
+	// TODO: attr.Expr = p.parseExpression()
 
 }

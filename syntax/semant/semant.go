@@ -57,6 +57,7 @@ func (sa *SemanticAnalyser) Errors() []string {
 func (sa *SemanticAnalyser) Analyze(program *ast.Program) {
 	sa.buildClassesSymboltables(program)
 	sa.buildSymboltables(program)
+	sa.buildInheritanceGraph(program) // TODO:
 	sa.typeCheck(program)
 }
 
@@ -155,9 +156,9 @@ func (sa *SemanticAnalyser) getWhileExpressionType(wexpr *ast.WhileExpression, s
 
 func (sa *SemanticAnalyser) getBlockExpressionType(bexpr *ast.BlockExpression, st *SymbolTable) string {
 	lastType := ""
+
+	// Go recursively to check all inner expressions
 	for _, expression := range bexpr.Expressions {
-		switch expression.(type)
-		// TODO: check type for block expressions (for example an assignment with a block expression in the method itself)
 		lastType = sa.getExpressionType(expression, st)
 	}
 
@@ -216,8 +217,6 @@ func (sa *SemanticAnalyser) buildSymboltables(program *ast.Program) {
 			case *ast.Method:
 				methodST := NewSymbolTable(classEntry.Scope)
 
-				// TODO: handle duplicates
-				// To check
 				if _, ok := classEntry.Scope.Lookup(f.Name.Value); ok {
 					sa.errors = append(sa.errors, fmt.Sprintf("method %s is already defined in class %s", f.Name.Value, class.Name.Value))
 					continue
@@ -253,7 +252,20 @@ func (sa *SemanticAnalyser) CheckBindingType(b *ast.Binding, st *SymbolTable) {
 
 func (sa *SemanticAnalyser) GetAssignmentExpressionType(a *ast.Assignment, st *SymbolTable) string {
 	// TODO: look for object in symbol table walking the scope and then check type
-	return ""
+	// TOCHECK:
+	se, ok := st.Lookup(a.Identifier.Value)
+	if !ok {
+		// TODO: should i check if it's an attribute?
+
+		sa.errors = append(sa.errors, fmt.Sprintf("undefined identifier %s in assignment", a.Identifier.Value))
+	}
+
+	exprType := sa.getExpressionType(a.Expression, st)
+	if !sa.isTypeConformant(exprType, a.Identifier.Value) {
+		sa.errors = append(sa.errors, fmt.Sprintf("type mismatch in assignment: variable '%s' has type %s but was assigned value of type %s", a.Identifier.Value, se., exprType))
+	}
+
+	return exprType
 }
 
 func (sa *SemanticAnalyser) GetUnaryExpressionType(uexpr *ast.UnaryExpression, st *SymbolTable) string {
