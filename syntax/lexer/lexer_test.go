@@ -17,14 +17,14 @@ func TestNextToken(t *testing.T) {
 			[]string{"class", "Main", "{", "}", ";", ""},
 		},
 		{
-			"x <- true;// One line comment\nx <- false;",
+			"x <- true;-- One line comment\nx <- false;",
 			[]TokenType{OBJECTID, ASSIGN, BOOL_CONST, SEMI, OBJECTID, ASSIGN, BOOL_CONST, SEMI, EOF},
 			[]string{"x", "<-", "true", ";", "x", "<-", "false", ";", ""},
 		},
 		{
-			"_a <- 0; b   <- _a <= \"1\\n\";",
+			"a <- 0; b   <- a <= \"1\\n\";",
 			[]TokenType{OBJECTID, ASSIGN, INT_CONST, SEMI, OBJECTID, ASSIGN, OBJECTID, LE, STR_CONST, SEMI, EOF},
-			[]string{"_a", "<-", "0", ";", "b", "<-", "_a", "<=", "1\n", ";", ""},
+			[]string{"a", "<-", "0", ";", "b", "<-", "a", "<=", "1\n", ";", ""},
 		},
 		{
 			"{true\n1\n\"some string\"\n}",
