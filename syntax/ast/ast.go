@@ -10,7 +10,7 @@ import (
 // - IntegerLiteral
 // - StringLiteral
 // - BooleanLiteral
-// Their field "Value" is technically just their "Token.Literal", we just used the field "Value" for easier access
+// Their field "Value" is technically just their "Token.Literal", I used the field "Value" just for easier access
 
 
 type Node interface {

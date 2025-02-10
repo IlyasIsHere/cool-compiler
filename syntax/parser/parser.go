@@ -84,14 +84,13 @@ func (p *Parser) ParseProgram() *ast.Program {
 func (p *Parser) ParseClass() *ast.Class {
 
 	c := &ast.Class{Token: p.curToken}
-	if !p.expectCurrent(lexer.CLASS) {
-		return nil
-	}
-
-	if !p.curTokenIs(lexer.TYPEID) {
-		p.currentError(lexer.TYPEID)
-		return nil
-	}
+  if !p.curTokenIs(lexer.CLASS) {
+    p.currentError(lexer.CLASS)
+    return nil
+  }
+  if !p.expectAndPeek(lexer.TYPEID) {
+    return nil
+  }
 
 	c.Name = &ast.TypeIdentifier{
 		Token: p.curToken,
@@ -102,18 +101,13 @@ func (p *Parser) ParseClass() *ast.Class {
 	if p.peekTokenIs(lexer.INHERITS) {
 		p.nextToken()
 
-		if !p.peekTokenIs(lexer.TYPEID) {
-			p.peekError(lexer.TYPEID)
-			return nil
-		}
-		p.nextToken()
-
-		// TODO:
+    if !p.expectAndPeek(lexer.TYPEID) {
+      return nil
+    }
 		c.Parent = &ast.TypeIdentifier{
 			Token: p.curToken,
 			Value: p.curToken.Literal,
 		}
-
 	}
 
   if !p.expectAndPeek(lexer.LBRACE) {
@@ -225,3 +219,36 @@ func (p *Parser) parseAttribute() *ast.Attribute {
     
   return attr
 }
+
+func (p *Parser) parsePrefixExpression() ast.Expression {
+  expression := &ast.UnaryExpression{
+    Token: p.curToken,
+    Operator: p.curToken.Literal,
+  }
+
+  p.nextToken()
+  expression.Right = p.parseExpression(PREFIX)
+  return expression
+}
+
+func (p *Parser) parseInfixExpression(left ast.Expression) {
+  expression := &ast.BinaryExpression{
+    Token: p.curToken,
+    Operator: p.curToken.Literal,
+    Left: left,
+  }
+
+  precedence := p.curPrecedence()
+  p.nextToken()
+  expression.Right = p.parseExpression(precedence)
+}
+
+func (p *Parser) parseExpression(minPrecedence int) ast.Expression {
+  // TODO
+  return nil
+}
+
+
+
+
+
