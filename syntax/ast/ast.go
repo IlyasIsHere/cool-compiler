@@ -4,6 +4,15 @@ import (
 	"cool-compiler/lexer"
 )
 
+// Note: For the following types: 
+// - ObjectIdentifier 
+// - TypeIdentifier 
+// - IntegerLiteral
+// - StringLiteral
+// - BooleanLiteral
+// Their field "Value" is technically just their "Token.Literal", we just used the field "Value" for easier access
+
+
 type Node interface {
 	TokenLiteral() string
 }

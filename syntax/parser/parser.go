@@ -116,6 +116,9 @@ func (p *Parser) ParseClass() *ast.Class {
 
 	}
 
+  if !p.expectAndPeek(lexer.LBRACE) {
+    return nil;
+  }
 	for !p.peekTokenIs(lexer.RBRACE) {
 		p.nextToken()
 		c.Features = append(c.Features, p.parseFeature())
@@ -197,37 +200,28 @@ func (p *Parser) parseAttribute() *ast.Attribute {
 		p.currentError(lexer.OBJECTID)
 		return nil
 	}
-	name := &ast.ObjectIdentifier{
+	attr.Name = &ast.ObjectIdentifier{
 		Token: p.curToken,
 		Value: p.curToken.Literal,
 	}
-	attr.Name = name
 
 	if !p.expectAndPeek(lexer.COLON) {
 		return nil
 	}
 
-	p.nextToken()
-	if !p.curTokenIs(lexer.TYPEID) {
-		p.currentError(lexer.TYPEID)
-		return nil
-	}
-	typeid := &ast.TypeIdentifier{
+  if !p.expectAndPeek(lexer.TYPEID) {
+    return nil
+  }
+	attr.TypeDecl = &ast.TypeIdentifier{
 		Token: p.curToken,
 		Value: p.curToken.Literal,
 	}
-	attr.TypeDecl = typeid
 
-	p.nextToken()
-
-	if p.curTokenIs(lexer.SEMI) {
-		p.nextToken()
-		return attr
-	}
-
-	if !p.expectCurrent(lexer.ASSIGN) {
-		return nil
-	}
-	// TODO: attr.Expr = p.parseExpression()
-
+  if p.peekTokenIs(lexer.ASSIGN) {
+    p.nextToken()
+    p.nextToken()
+    attr.Expr = p.parseExpression()
+  }
+    
+  return attr
 }
