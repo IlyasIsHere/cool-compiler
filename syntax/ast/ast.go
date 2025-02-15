@@ -4,14 +4,14 @@ import (
 	"cool-compiler/lexer"
 )
 
-// Note: For the following types: 
-// - ObjectIdentifier 
-// - TypeIdentifier 
+// Note: For the following types:
+// - ObjectIdentifier
+// - TypeIdentifier
 // - IntegerLiteral
 // - StringLiteral
 // - BooleanLiteral
 // Their field "Value" is technically just their "Token.Literal", I used the field "Value" just for easier access
-
+// Types might not be always the same (for example for IntegerLiteral, Value is an int, not a string)
 
 type Node interface {
 	TokenLiteral() string
@@ -198,6 +198,10 @@ type CaseExpression struct {
 
 func (caseexp *CaseExpression) TokenLiteral() string { return caseexp.Token.Literal }
 func (caseexp *CaseExpression) expressionNode()      {}
+
+type CallExpression struct {
+	Token lexer.Token
+}
 
 type CaseBranch struct {
 	Token      lexer.Token
