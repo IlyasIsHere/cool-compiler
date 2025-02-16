@@ -71,7 +71,7 @@ type Method struct {
 	Token      lexer.Token
 	Name       *ObjectIdentifier
 	TypeDecl   *TypeIdentifier
-	Formals    []Formal
+	Formals    []*Formal
 	Expression Expression
 }
 
@@ -193,7 +193,7 @@ func (binexp *BinaryExpression) expressionNode()      {}
 type CaseExpression struct {
 	Token      lexer.Token
 	Expression Expression
-	Branches   []CaseBranch
+	Branches   []*CaseBranch
 }
 
 func (caseexp *CaseExpression) TokenLiteral() string { return caseexp.Token.Literal }
@@ -210,11 +210,11 @@ type CaseBranch struct {
 	Expression Expression
 }
 
-type Assignment struct {
+type AssignmentExpression struct {
 	Token      lexer.Token
 	Identifier *ObjectIdentifier
 	Expression Expression
 }
 
-func (a *Assignment) TokenLiteral() string { return a.Token.Literal }
-func (a *Assignment) expressionNode()      {}
+func (a *AssignmentExpression) TokenLiteral() string { return a.Token.Literal }
+func (a *AssignmentExpression) expressionNode()      {}
