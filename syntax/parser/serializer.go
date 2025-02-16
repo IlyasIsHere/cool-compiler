@@ -31,6 +31,8 @@ func SerializeExpression(exp ast.Expression) string {
 			sb.WriteString(SerializeExpression(expr))
 			if i < len(node.Expressions)-1 {
 				sb.WriteString("; ")
+			} else {
+				sb.WriteString(";")
 			}
 		}
 		sb.WriteString(" }")
@@ -57,6 +59,54 @@ func SerializeExpression(exp ast.Expression) string {
 		return fmt.Sprintf("new %s", node.Type.Value)
 	case *ast.IsVoidExpression:
 		return fmt.Sprintf("isvoid %s", SerializeExpression(node.Expression))
+	case *ast.CallExpression:
+		var sb strings.Builder
+		sb.WriteString(SerializeExpression(node.Function))
+		sb.WriteString("(")
+		for i, arg := range node.Arguments {
+			sb.WriteString(SerializeExpression(arg))
+			if i < len(node.Arguments)-1 {
+				sb.WriteString(", ")
+			}
+		}
+		sb.WriteString(")")
+		return sb.String()
+	case *ast.DotCallExpression:
+		var sb strings.Builder
+		sb.WriteString(SerializeExpression(node.Object))
+		if node.Type != nil {
+			sb.WriteString("@")
+			sb.WriteString(node.Type.Value)
+		}
+		sb.WriteString(".")
+		sb.WriteString(node.Method.Value)
+		sb.WriteString("(")
+		for i, arg := range node.Arguments {
+			sb.WriteString(SerializeExpression(arg))
+			if i < len(node.Arguments)-1 {
+				sb.WriteString(", ")
+			}
+		}
+		sb.WriteString(")")
+		return sb.String()
+	case *ast.CaseExpression:
+		var sb strings.Builder
+		sb.WriteString("case ")
+		sb.WriteString(SerializeExpression(node.Expression))
+		sb.WriteString(" of")
+		for _, branch := range node.Branches {
+			sb.WriteString(" ")
+			sb.WriteString(branch.Identifier.Value)
+			sb.WriteString(" : ")
+			sb.WriteString(branch.Type.Value)
+			sb.WriteString(" => ")
+			sb.WriteString(SerializeExpression(branch.Expression))
+			sb.WriteString(";")
+		}
+		sb.WriteString(" esac")
+		return sb.String()
+	case *ast.AssignmentExpression:
+		return fmt.Sprintf("(%s <- %s)", node.Identifier.Value, SerializeExpression(node.Expression))
 	default:
 		return fmt.Sprintf("%t", node)
 	}

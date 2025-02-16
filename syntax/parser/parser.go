@@ -11,6 +11,7 @@ type Precedence int
 
 const (
 	LOWEST Precedence = iota
+	ASSIGN
 	EQUALS
 	SUM
 	PRODUCT
@@ -21,7 +22,7 @@ const (
 )
 
 var precedences = map[lexer.TokenType]Precedence{
-	lexer.ASSIGN: LOWEST,
+	lexer.ASSIGN: ASSIGN,
 	lexer.PLUS:   SUM,
 	lexer.MINUS:  SUM,
 	lexer.TIMES:  PRODUCT,
@@ -30,6 +31,8 @@ var precedences = map[lexer.TokenType]Precedence{
 	lexer.LE:     EQUALS,
 	lexer.EQ:     EQUALS,
 	lexer.LPAREN: CALL,
+	lexer.DOT:    CALL,
+	lexer.AT:     AT,
 }
 
 type Parser struct {
@@ -51,8 +54,12 @@ func New(l *lexer.Lexer) *Parser {
 	p.prefixParseFns = make(map[lexer.TokenType]prefixParseFn)
 	p.registerPrefix(lexer.OBJECTID, p.parseIdentifier)
 	p.registerPrefix(lexer.INT_CONST, p.parseInteger)
+	p.registerPrefix(lexer.STR_CONST, p.parseString)
+	p.registerPrefix(lexer.NEW, p.parseNewExpression)
+	p.registerPrefix(lexer.ISVOID, p.parseIsVoidExpression)
 	p.registerPrefix(lexer.NOT, p.parsePrefixExpression)
 	p.registerPrefix(lexer.MINUS, p.parsePrefixExpression)
+	p.registerPrefix(lexer.NEG, p.parsePrefixExpression)
 	p.registerPrefix(lexer.BOOL_CONST, p.parseBoolean)
 	p.registerPrefix(lexer.LPAREN, p.parseParenthesisExpression)
 	p.registerPrefix(lexer.IF, p.parseIfExpression)
@@ -70,7 +77,9 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(lexer.LT, p.parseInfixExpression)
 	p.registerInfix(lexer.LE, p.parseInfixExpression)
 	p.registerInfix(lexer.EQ, p.parseInfixExpression)
-	// p.registerInfix(lexer.LPAREN, p.parseCallExpression)
+	p.registerInfix(lexer.LPAREN, p.parseCallExpression)
+	p.registerInfix(lexer.DOT, p.parseDotCallExpression)
+	p.registerInfix(lexer.AT, p.parseDotCallExpression)
 
 	p.nextToken()
 	p.nextToken()
@@ -201,16 +210,13 @@ func (p *Parser) parseMethod() *ast.Method {
 	}
 	method.Name = name
 
-	if !p.expectAndPeek(lexer.LPAREN) {
-		return nil
-	}
-
+	p.nextToken()
 	method.Formals = p.parseFormals()
 	if method.Formals == nil {
 		return nil
 	}
 
-	if !p.expectAndPeek(lexer.RPAREN) && !p.expectAndPeek(lexer.COLON) {
+	if !p.expectAndPeek(lexer.COLON) {
 		return nil
 	}
 
@@ -235,13 +241,18 @@ func (p *Parser) parseMethod() *ast.Method {
 }
 
 func (p *Parser) parseFormals() []*ast.Formal {
-	var formals []*ast.Formal
+	if !p.curTokenIs(lexer.LPAREN) {
+		p.currentError(lexer.LPAREN)
+		return nil
+	}
+	formals := []*ast.Formal{}
 
 	if p.peekTokenIs(lexer.RPAREN) {
+		p.nextToken()
 		return formals
 	}
 
-	p.nextToken()
+	p.nextToken() // consume LPAREN
 	formal := p.parseFormal()
 	if formal == nil {
 		return nil
@@ -251,12 +262,16 @@ func (p *Parser) parseFormals() []*ast.Formal {
 
 	for p.peekTokenIs(lexer.COMMA) {
 		p.nextToken() // consume comma
-		p.nextToken() // move the next formal
+		p.nextToken() // move to the next formal
 		formal := p.parseFormal()
 		if formal == nil {
 			return nil
 		}
 		formals = append(formals, formal)
+	}
+
+	if !p.expectAndPeek(lexer.RPAREN) {
+		return nil
 	}
 
 	return formals
@@ -350,14 +365,13 @@ func (p *Parser) parseIdentifier() ast.Expression {
 }
 
 func (p *Parser) parseInteger() ast.Expression {
-	if !p.curTokenIs(lexer.BOOL_CONST) {
-		p.currentError(lexer.BOOL_CONST)
+	if !p.curTokenIs(lexer.INT_CONST) {
+		p.currentError(lexer.INT_CONST)
 		return nil
 	}
 	intLiteral := &ast.IntegerLiteral{Token: p.curToken}
 
 	num, err := strconv.Atoi(p.curToken.Literal)
-
 	if err != nil {
 		msg := fmt.Sprintf("Could not parse %q as integer", p.curToken.Literal)
 		p.errors = append(p.errors, msg)
@@ -659,13 +673,93 @@ func (p *Parser) parseBlockExpression() ast.Expression {
 		}
 	}
 
+	if !p.expectAndPeek(lexer.RBRACE) {
+		return nil
+	}
+
 	blockExp.Expressions = expressions
 	return blockExp
 }
 
 func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
-	// TODO:
-	return nil
+	exp := &ast.CallExpression{
+		Token:    p.curToken,
+		Function: function,
+	}
+
+	if !p.curTokenIs(lexer.LPAREN) {
+		p.currentError(lexer.LPAREN)
+		return nil
+	}
+
+	exp.Arguments = p.parseExpressionList(lexer.RPAREN)
+
+	return exp
+}
+
+func (p *Parser) parseDotCallExpression(object ast.Expression) ast.Expression {
+	exp := &ast.DotCallExpression{
+		Token:  p.curToken,
+		Object: object,
+	}
+
+	// Check for static dispatch
+	if p.curTokenIs(lexer.AT) {
+
+		if !p.expectAndPeek(lexer.TYPEID) {
+			return nil
+		}
+
+		exp.Type = &ast.TypeIdentifier{
+			Token: p.curToken,
+			Value: p.curToken.Literal,
+		}
+
+		if !p.expectAndPeek(lexer.DOT) {
+			return nil
+		}
+	}
+
+	if !p.expectAndPeek(lexer.OBJECTID) {
+		return nil
+	}
+
+	exp.Method = &ast.ObjectIdentifier{
+		Token: p.curToken,
+		Value: p.curToken.Literal,
+	}
+
+	if !p.expectAndPeek(lexer.LPAREN) {
+		return nil
+	}
+
+	exp.Arguments = p.parseExpressionList(lexer.RPAREN)
+
+	return exp
+}
+
+func (p *Parser) parseExpressionList(end lexer.TokenType) []ast.Expression {
+	args := []ast.Expression{}
+
+	if p.peekTokenIs(end) {
+		p.nextToken()
+		return args
+	}
+
+	p.nextToken()
+	args = append(args, p.parseExpression(LOWEST))
+
+	for p.peekTokenIs(lexer.COMMA) {
+		p.nextToken() // consume comma
+		p.nextToken() // move to next expression
+		args = append(args, p.parseExpression(LOWEST))
+	}
+
+	if !p.expectAndPeek(end) {
+		return nil
+	}
+
+	return args
 }
 
 func (p *Parser) parsePrefixExpression() ast.Expression {
@@ -708,6 +802,9 @@ func (p *Parser) parseAssignment(left ast.Expression) ast.Expression {
 
 	p.nextToken()
 	assignment.Expression = p.parseExpression(LOWEST)
+	if assignment.Expression == nil {
+		return nil
+	}
 
 	return assignment
 }
@@ -749,4 +846,15 @@ func (p *Parser) parseExpression(minPrecedence Precedence) ast.Expression {
 	}
 
 	return leftExp
+}
+
+func (p *Parser) parseString() ast.Expression {
+	if !p.curTokenIs(lexer.STR_CONST) {
+		p.currentError(lexer.STR_CONST)
+		return nil
+	}
+	return &ast.StringLiteral{
+		Token: p.curToken,
+		Value: p.curToken.Literal,
+	}
 }
