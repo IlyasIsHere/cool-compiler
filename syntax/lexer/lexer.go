@@ -69,7 +69,7 @@ const (
 func (tt TokenType) String() string {
 	return [...]string{"EOF", "ERROR", "CLASS", "INHERITS", "ISVOID", "IF", "ELSE", "FI", "THEN", "LET", "IN", "WHILE", "CASE", "ESCA", "LOOP", "POOL",
 		"NEW", "OF", "NOT", "STR_CONST", "BOOL_CONST", "INT_CONST", "TYPEID", "OBJECTID", "ASSIGN", "DARROW", "LT", "LE", "EQ", "PLUS", "MINUS", "TIMES",
-		"DIVIDE", "LPAREN", "RPAREN", "LBRACE", "RBACE", "SEMI", "COLON", "COMMA", "DOT", "AT", "NEG"}[tt]
+		"DIVIDE", "LPAREN", "RPAREN", "LBRACE", "RBRACE", "SEMI", "COLON", "COMMA", "DOT", "AT", "NEG"}[tt]
 }
 
 // Token represents a lexical token with its type, value, and position
@@ -301,6 +301,10 @@ func (l *Lexer) NextToken() Token {
 	case l.char == '.':
 		tok.Type = DOT
 		tok.Literal = "."
+		l.readChar()
+	case l.char == '@':
+		tok.Type = AT
+		tok.Literal = "@"
 		l.readChar()
 	case l.char == '/':
 		tok.Type = DIVIDE

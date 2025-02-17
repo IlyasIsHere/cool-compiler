@@ -200,8 +200,13 @@ func (caseexp *CaseExpression) TokenLiteral() string { return caseexp.Token.Lite
 func (caseexp *CaseExpression) expressionNode()      {}
 
 type CallExpression struct {
-	Token lexer.Token
+	Token     lexer.Token
+	Function  Expression // This can be an identifier or a dot expression
+	Arguments []Expression
 }
+
+func (ce *CallExpression) TokenLiteral() string { return ce.Token.Literal }
+func (ce *CallExpression) expressionNode()      {}
 
 type CaseBranch struct {
 	Token      lexer.Token
@@ -218,3 +223,14 @@ type AssignmentExpression struct {
 
 func (a *AssignmentExpression) TokenLiteral() string { return a.Token.Literal }
 func (a *AssignmentExpression) expressionNode()      {}
+
+type DotCallExpression struct {
+	Token     lexer.Token
+	Object    Expression
+	Type      *TypeIdentifier // Optional, for static dispatch (@Type)
+	Method    *ObjectIdentifier
+	Arguments []Expression
+}
+
+func (dce *DotCallExpression) TokenLiteral() string { return dce.Token.Literal }
+func (dce *DotCallExpression) expressionNode()      {}
