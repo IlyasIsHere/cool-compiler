@@ -59,7 +59,7 @@ func (sa *SemanticAnalyser) Errors() []string {
 
 func (sa *SemanticAnalyser) Analyze(program *ast.Program) {
 	sa.buildClassesSymboltables(program)
-	sa.buildSymboltables(program)
+	sa.buildSymbolTables(program)
 	sa.buildInheritanceGraph(program)
 	sa.typeCheck(program)
 }
@@ -86,6 +86,12 @@ func (sa *SemanticAnalyser) typeCheckClass(cls *ast.Class, st *SymbolTable) {
 }
 
 func (sa *SemanticAnalyser) typeCheckAttribute(attribute *ast.Attribute, st *SymbolTable) {
+	// Check if attribute is named 'self'
+	if attribute.Name.Value == "self" {
+		sa.errors = append(sa.errors, "cannot have attribute named 'self'")
+		return
+	}
+
 	if attribute.Expression != nil {
 		expressionType := sa.getExpressionType(attribute.Expression, st)
 		if !sa.isTypeConformant(expressionType, attribute.TypeDecl.Value) {
@@ -95,8 +101,19 @@ func (sa *SemanticAnalyser) typeCheckAttribute(attribute *ast.Attribute, st *Sym
 }
 
 func (sa *SemanticAnalyser) typeCheckMethod(method *ast.Method, st *SymbolTable) {
+
 	methodSt := st.symbols[method.Name.Value].Scope
 	for _, formal := range method.Formals {
+		if formal.Name.Value == "self" {
+			sa.errors = append(sa.errors, "cannot use 'self' as formal parameter")
+			continue
+		}
+
+		if formal.TypeDecl.Value == "SELF_TYPE" {
+			sa.errors = append(sa.errors, "SELF_TYPE is not allowed as formal parameter type")
+			continue
+		}
+
 		if _, ok := methodSt.Lookup(formal.Name.Value); ok {
 			sa.errors = append(sa.errors, fmt.Sprintf("argument %s in method %s is already defined", formal.Name.Value, method.Name.Value))
 			continue
@@ -159,6 +176,8 @@ func (sa *SemanticAnalyser) getExpressionType(expression ast.Expression, st *Sym
 	}
 }
 
+// TODO: handle "main" function requirements
+
 func (sa *SemanticAnalyser) getObjectIdentifierType(identifier *ast.ObjectIdentifier, st *SymbolTable) string {
 	entry, ok := st.Lookup(identifier.Value)
 	if !ok {
@@ -214,32 +233,20 @@ func (sa *SemanticAnalyser) buildClassesSymboltables(program *ast.Program) {
 	sa.initializeBoolClass()
 
 	for _, class := range program.Classes {
+		// Only check for duplicate classes, not parent relationships
 		if _, ok := sa.globalSymbolTable.Lookup(class.Name.Value); ok {
 			sa.errors = append(sa.errors, fmt.Sprintf("class %s is already defined", class.Name.Value))
 			continue
 		}
 
-		var parentScope *SymbolTable
-		if class.Parent != nil {
-			parentEntry, ok := sa.globalSymbolTable.Lookup(class.Parent.Value)
-			if !ok {
-				// This error should ideally be caught in buildInheritanceGraph, but adding a check here for robustness
-				sa.errors = append(sa.errors, fmt.Sprintf("class %s inherits from undefined class %s", class.Name.Value, class.Parent.Value))
-				parentScope = sa.globalSymbolTable.symbols["Object"].Scope // Fallback to Object's scope to avoid further errors
-			} else {
-				parentScope = parentEntry.Scope
-			}
-		} else {
-			parentScope = sa.globalSymbolTable.symbols["Object"].Scope // Default parent is Object
-		}
-
-		classScope := NewSymbolTable(parentScope) // Set parent scope for inheritance
+		// Create scope with nil parent temporarily
+		classScope := NewSymbolTable(nil)
 		sa.globalSymbolTable.AddEntry(class.Name.Value, &SymbolEntry{
 			Type:  "Class",
 			Token: class.Name.Token,
 			Scope: classScope,
 		})
-		sa.inheritanceGraph.AddNode(class.Name.Value, class) // Add to inheritance graph
+		sa.inheritanceGraph.AddNode(class.Name.Value, class)
 	}
 }
 
@@ -392,7 +399,7 @@ func (sa *SemanticAnalyser) initializeBoolClass() {
 	})
 }
 
-func (sa *SemanticAnalyser) buildSymboltables(program *ast.Program) {
+func (sa *SemanticAnalyser) buildSymbolTables(program *ast.Program) {
 	for _, class := range program.Classes {
 		classEntry, _ := sa.globalSymbolTable.Lookup(class.Name.Value)
 		for _, feature := range class.Features {
@@ -411,6 +418,21 @@ func (sa *SemanticAnalyser) buildSymboltables(program *ast.Program) {
 					continue
 				}
 				classEntry.Scope.AddEntry(f.Name.Value, &SymbolEntry{Type: "Method", Token: f.Name.Token, Scope: methodST, Method: f})
+
+				// Check if this method overrides a parent's method
+				currentClass := class.Name.Value
+				parentClass := sa.inheritanceGraph.edges[currentClass]
+				for parentClass != "" {
+					if parentEntry, ok := sa.globalSymbolTable.Lookup(parentClass); ok {
+						if parentMethodEntry, exists := parentEntry.Scope.Lookup(f.Name.Value); exists && parentMethodEntry.Type == "Method" {
+							sa.validateMethodOverride(f, parentMethodEntry.Method)
+							break // Stop after checking the first ancestor that has the method
+						}
+						parentClass = sa.inheritanceGraph.edges[parentClass]
+					} else {
+						break
+					}
+				}
 			}
 		}
 	}
@@ -436,13 +458,16 @@ func (sa *SemanticAnalyser) GetNewExpressionType(ne *ast.NewExpression, st *Symb
 func (sa *SemanticAnalyser) checkLetBinding(binding *ast.Binding, st *SymbolTable) string {
 	declaredType := binding.Type.Value
 
-	// Error: SELF_TYPE not allowed in let binding
+	// Handle SELF_TYPE
 	if declaredType == "SELF_TYPE" {
-		sa.errors = append(sa.errors, "SELF_TYPE is not allowed as type in let binding")
-		declaredType = "Object" // Recover by assuming Object type
+		if sa.currentClass == "" {
+			sa.errors = append(sa.errors, "SELF_TYPE used outside of class context")
+			return "Object"
+		}
+		declaredType = sa.currentClass
 	}
 
-	// Error: Check if declaredType is a valid type
+	// Check if declaredType is a valid type
 	if _, ok := sa.globalSymbolTable.Lookup(declaredType); !ok {
 		sa.errors = append(sa.errors, fmt.Sprintf("undefined type %s in let binding", declaredType))
 		declaredType = "Object" // Recover by assuming Object type
@@ -736,18 +761,29 @@ func (sa *SemanticAnalyser) getDotCallExpressionType(dotCall *ast.DotCallExpress
 }
 
 func (sa *SemanticAnalyser) buildInheritanceGraph(program *ast.Program) {
-	// Second pass: add all edges
 	for _, class := range program.Classes {
 		parentName := "Object"
 		if class.Parent != nil {
 			parentName = class.Parent.Value
 
-			// Check if parent exists in the inheritance graph (nodes already added in buildClassesSymboltables)
-			if _, ok := sa.inheritanceGraph.nodes[parentName]; !ok {
-				sa.errors = append(sa.errors, fmt.Sprintf("class %s inherits from undefined class %s",
-					class.Name.Value, parentName))
+			parentEntry, ok := sa.globalSymbolTable.Lookup(parentName)
+
+			// Check if parent exists
+			if !ok {
+				sa.errors = append(sa.errors,
+					fmt.Sprintf("class %s inherits from undefined class %s",
+						class.Name.Value, parentName))
 				continue
 			}
+
+			// Check for inheritance from forbidden classes
+			if parentName == "Int" || parentName == "String" || parentName == "Bool" {
+				sa.errors = append(sa.errors, fmt.Sprintf("class %s cannot inherit from built-in class %s", class.Name.Value, parentName))
+				continue
+			}
+
+			// Set actual parent scope now that all classes are registered
+			sa.globalSymbolTable.symbols[class.Name.Value].Scope.parent = parentEntry.Scope
 		}
 
 		sa.inheritanceGraph.AddEdge(class.Name.Value, parentName)
@@ -757,4 +793,37 @@ func (sa *SemanticAnalyser) buildInheritanceGraph(program *ast.Program) {
 			sa.errors = append(sa.errors, fmt.Sprintf("inheritance cycle detected: %v", cycle))
 		}
 	}
+}
+
+func (sa *SemanticAnalyser) validateMethodOverride(method *ast.Method, parentMethod *ast.Method) bool {
+	// Check number of arguments
+	if len(method.Formals) != len(parentMethod.Formals) {
+		sa.errors = append(sa.errors, fmt.Sprintf(
+			"method %s overrides parent method but has different number of parameters (%d vs %d)",
+			method.Name.Value, len(method.Formals), len(parentMethod.Formals)))
+		return false
+	}
+
+	// Check parameter types
+	for i, formal := range method.Formals {
+		if formal.TypeDecl.Value != parentMethod.Formals[i].TypeDecl.Value {
+			sa.errors = append(sa.errors, fmt.Sprintf(
+				"method %s overrides parent method but parameter %d has different type (%s vs %s)",
+				method.Name.Value, i+1, formal.TypeDecl.Value, parentMethod.Formals[i].TypeDecl.Value))
+			return false
+		}
+	}
+
+	// Check return type
+	expectedReturn := parentMethod.TypeDecl.Value
+	actualReturn := method.TypeDecl.Value
+
+	if expectedReturn != actualReturn {
+		sa.errors = append(sa.errors, fmt.Sprintf(
+			"method %s overrides parent method but has different return type (%s vs %s)",
+			method.Name.Value, actualReturn, expectedReturn))
+		return false
+	}
+
+	return true
 }

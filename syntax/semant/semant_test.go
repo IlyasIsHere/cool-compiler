@@ -29,7 +29,7 @@ func TestSemanticAnalysis(t *testing.T) {
 			code: `
                 class Bad inherits Int {};
             `,
-			expected: []string{"cannot inherit from final class Int"},
+			expected: []string{"class Bad cannot inherit from built-in class Int"},
 		},
 		{
 			name: "Inherit from undefined class",
@@ -37,6 +37,14 @@ func TestSemanticAnalysis(t *testing.T) {
                 class Main inherits UndefinedClass {};
             `,
 			expected: []string{"undefined class UndefinedClass"},
+		},
+		{
+			name: "hhh",
+			code: `
+                class A inherits B {};
+                class B {};
+            `,
+			expected: []string{"inheritance cycle detected"},
 		},
 		{
 			name: "Inheritance cycle detection",
@@ -241,7 +249,7 @@ func TestSemanticAnalysis(t *testing.T) {
 		},
 	}
 
-	testNum := 1
+	testNum := 3
 
 	for _, tt := range tests[testNum : testNum+1] {
 		// for _, tt := range tests {
