@@ -39,10 +39,11 @@ func (st *SymbolTable) Lookup(name string) (*SymbolEntry, bool) {
 }
 
 type SemanticAnalyser struct {
-	globalSymbolTable *SymbolTable
-	errors            []string
-	inheritanceGraph  *InheritanceGraph
-	currentClass      string
+	globalSymbolTable   *SymbolTable
+	errors              []string
+	inheritanceGraph    *InheritanceGraph
+	currentClass        string
+	objectClassSymEntry *SymbolEntry
 }
 
 func NewSemanticAnalyser() *SemanticAnalyser {
@@ -61,6 +62,7 @@ func (sa *SemanticAnalyser) Analyze(program *ast.Program) {
 	sa.buildClassesSymboltables(program)
 	sa.buildSymbolTables(program)
 	sa.buildInheritanceGraph(program)
+	sa.validateMainClass(program)
 	sa.typeCheck(program)
 }
 
@@ -92,6 +94,12 @@ func (sa *SemanticAnalyser) typeCheckAttribute(attribute *ast.Attribute, st *Sym
 		return
 	}
 
+	// Check if attribute type exists
+	if _, ok := sa.globalSymbolTable.Lookup(attribute.TypeDecl.Value); !ok {
+		sa.errors = append(sa.errors, fmt.Sprintf("undefined type %s for attribute %s", attribute.TypeDecl.Value, attribute.Name.Value))
+		return
+	}
+
 	if attribute.Expression != nil {
 		expressionType := sa.getExpressionType(attribute.Expression, st)
 		if !sa.isTypeConformant(expressionType, attribute.TypeDecl.Value) {
@@ -111,6 +119,12 @@ func (sa *SemanticAnalyser) typeCheckMethod(method *ast.Method, st *SymbolTable)
 
 		if formal.TypeDecl.Value == "SELF_TYPE" {
 			sa.errors = append(sa.errors, "SELF_TYPE is not allowed as formal parameter type")
+			continue
+		}
+
+		// Check if formal type exists
+		if _, ok := sa.globalSymbolTable.Lookup(formal.TypeDecl.Value); !ok {
+			sa.errors = append(sa.errors, fmt.Sprintf("undefined type %s in formal parameter of method %s", formal.TypeDecl.Value, method.Name.Value))
 			continue
 		}
 
@@ -273,17 +287,20 @@ func (sa *SemanticAnalyser) initializeObjectClass() {
 		},
 	})
 
-	sa.globalSymbolTable.AddEntry("Object", &SymbolEntry{
+	objectSymbolEntry := &SymbolEntry{
 		Type:  "Class",
 		Token: lexer.Token{Literal: "Object"},
 		Scope: objectScope,
-	})
+	}
+
+	sa.globalSymbolTable.AddEntry("Object", objectSymbolEntry)
+	sa.objectClassSymEntry = objectSymbolEntry
 
 	sa.inheritanceGraph.AddNode("Object", &ast.Class{Name: &ast.TypeIdentifier{Value: "Object"}})
 }
 
 func (sa *SemanticAnalyser) initializeIOClass() {
-	ioScope := NewSymbolTable(nil)
+	ioScope := NewSymbolTable(sa.objectClassSymEntry.Scope) // Set parent to Object's scope
 
 	// Add IO methods
 	ioScope.AddEntry("out_string", &SymbolEntry{
@@ -327,10 +344,11 @@ func (sa *SemanticAnalyser) initializeIOClass() {
 		Name:   &ast.TypeIdentifier{Value: "IO"},
 		Parent: &ast.TypeIdentifier{Value: "Object"},
 	})
+	sa.inheritanceGraph.AddEdge("IO", "Object")
 }
 
 func (sa *SemanticAnalyser) initializeStringClass() {
-	stringScope := NewSymbolTable(nil)
+	stringScope := NewSymbolTable(sa.objectClassSymEntry.Scope) // Set parent to Object's scope
 
 	// Add String methods
 	stringScope.AddEntry("length", &SymbolEntry{
@@ -369,6 +387,7 @@ func (sa *SemanticAnalyser) initializeStringClass() {
 		Name:   &ast.TypeIdentifier{Value: "String"},
 		Parent: &ast.TypeIdentifier{Value: "Object"},
 	})
+	sa.inheritanceGraph.AddEdge("String", "Object")
 }
 
 func (sa *SemanticAnalyser) initializeIntClass() {
@@ -376,13 +395,14 @@ func (sa *SemanticAnalyser) initializeIntClass() {
 	sa.globalSymbolTable.AddEntry("Int", &SymbolEntry{
 		Type:  "Class",
 		Token: lexer.Token{Literal: "Int"},
-		Scope: NewSymbolTable(nil),
+		Scope: NewSymbolTable(sa.objectClassSymEntry.Scope), // Set parent to Object's scope
 	})
 
 	sa.inheritanceGraph.AddNode("Int", &ast.Class{
 		Name:   &ast.TypeIdentifier{Value: "Int"},
 		Parent: &ast.TypeIdentifier{Value: "Object"},
 	})
+	sa.inheritanceGraph.AddEdge("Int", "Object")
 }
 
 func (sa *SemanticAnalyser) initializeBoolClass() {
@@ -390,13 +410,14 @@ func (sa *SemanticAnalyser) initializeBoolClass() {
 	sa.globalSymbolTable.AddEntry("Bool", &SymbolEntry{
 		Type:  "Class",
 		Token: lexer.Token{Literal: "Bool"},
-		Scope: NewSymbolTable(nil),
+		Scope: NewSymbolTable(sa.objectClassSymEntry.Scope), // Set parent to Object's scope
 	})
 
 	sa.inheritanceGraph.AddNode("Bool", &ast.Class{
 		Name:   &ast.TypeIdentifier{Value: "Bool"},
 		Parent: &ast.TypeIdentifier{Value: "Object"},
 	})
+	sa.inheritanceGraph.AddEdge("Bool", "Object")
 }
 
 func (sa *SemanticAnalyser) buildSymbolTables(program *ast.Program) {
@@ -765,27 +786,26 @@ func (sa *SemanticAnalyser) buildInheritanceGraph(program *ast.Program) {
 		parentName := "Object"
 		if class.Parent != nil {
 			parentName = class.Parent.Value
+		}
 
-			parentEntry, ok := sa.globalSymbolTable.Lookup(parentName)
+		// Always look up parent - will be Object for classes without explicit parent
+		parentEntry, ok := sa.globalSymbolTable.Lookup(parentName)
+		if !ok {
+			sa.errors = append(sa.errors,
+				fmt.Sprintf("class %s inherits from undefined class %s",
+					class.Name.Value, parentName))
+			continue
+		}
 
-			// Check if parent exists
-			if !ok {
-				sa.errors = append(sa.errors,
-					fmt.Sprintf("class %s inherits from undefined class %s",
-						class.Name.Value, parentName))
-				continue
-			}
-
-			// Check for inheritance from forbidden classes
+		if class.Parent != nil { // Only check forbidden inheritance for explicit parents
 			if parentName == "Int" || parentName == "String" || parentName == "Bool" {
 				sa.errors = append(sa.errors, fmt.Sprintf("class %s cannot inherit from built-in class %s", class.Name.Value, parentName))
 				continue
 			}
-
-			// Set actual parent scope now that all classes are registered
-			sa.globalSymbolTable.symbols[class.Name.Value].Scope.parent = parentEntry.Scope
 		}
 
+		// Set parent scope for ALL classes (including those inheriting from Object)
+		sa.globalSymbolTable.symbols[class.Name.Value].Scope.parent = parentEntry.Scope
 		sa.inheritanceGraph.AddEdge(class.Name.Value, parentName)
 
 		// Check for cycles
@@ -826,4 +846,25 @@ func (sa *SemanticAnalyser) validateMethodOverride(method *ast.Method, parentMet
 	}
 
 	return true
+}
+
+func (sa *SemanticAnalyser) validateMainClass(program *ast.Program) {
+	mainEntry, exists := sa.globalSymbolTable.Lookup("Main")
+	if !exists {
+		sa.errors = append(sa.errors, "program must have a class Main")
+		return
+	}
+
+	// Check main method exists directly in Main class (not inherited)
+	mainScope := mainEntry.Scope
+	mainMethod, methodExists := mainScope.symbols["main"]
+	if !methodExists || mainMethod.Type != "Method" {
+		sa.errors = append(sa.errors, "class Main must define method 'main' with 0 parameters")
+		return
+	}
+
+	// Verify no parameters
+	if len(mainMethod.Method.Formals) > 0 {
+		sa.errors = append(sa.errors, "main method must have 0 parameters")
+	}
 }

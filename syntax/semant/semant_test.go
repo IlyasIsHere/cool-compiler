@@ -9,6 +9,20 @@ import (
 	"testing"
 )
 
+func validMainClass() string {
+	return `
+        class Main {
+            main(): Object {
+                0
+            };
+        };
+    `
+}
+
+func withMainClass(code string) string {
+	return code + validMainClass()
+}
+
 func TestSemanticAnalysis(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -19,38 +33,79 @@ func TestSemanticAnalysis(t *testing.T) {
 		{
 			name: "Duplicate class definition",
 			code: `
-                class Main {};
-                class Main {};
-            `,
+        class Main {
+            main(): Object { 0 };
+        };
+        class Main {};
+    `,
 			expected: []string{"class Main is already defined"},
 		},
 		{
 			name: "Inherit from basic class",
 			code: `
-                class Bad inherits Int {};
+				class Bad inherits Int {};
+				class Main {
+					main(): Object { 0 };
+				};
             `,
 			expected: []string{"class Bad cannot inherit from built-in class Int"},
 		},
 		{
 			name: "Inherit from undefined class",
 			code: `
-                class Main inherits UndefinedClass {};
+                class Main inherits UndefinedClass {
+					main(): Object { 0 };
+				};
             `,
 			expected: []string{"undefined class UndefinedClass"},
 		},
 		{
-			name: "hhh",
+			name: "Main inherits from A",
 			code: `
-                class A inherits B {};
-                class B {};
+                class A {};
+                class Main inherits A {
+					main(): Object { 0 };
+				};
             `,
-			expected: []string{"inheritance cycle detected"},
+			expected: []string{},
+		},
+		{
+			name: "Main inherits main method from parent",
+			code: `
+                class A {
+                    main(): Object { 0 };
+                };
+                class Main inherits A {};
+            `,
+			expected: []string{"class Main must define method 'main' with 0 parameters"},
+		},
+		{
+			name: "main method doesn't respect signature",
+			code: `
+                class Main {
+                    main(a: A): Object { 1 };
+                };
+            `,
+			expected: []string{"main method must have 0 parameters", "undefined type A in formal parameter of method main"},
+		},
+		{
+			name: "undefined type in method parameters",
+			code: `
+                class Main {
+                    main(): Object { 1 };
+                    test(a: A): String { "hhh" }; 
+                };
+            `,
+			expected: []string{"undefined type A in formal parameter of method test"},
 		},
 		{
 			name: "Inheritance cycle detection",
 			code: `
                 class A inherits B {};
                 class B inherits A {};
+				class Main {
+					main(): Object { 0 };
+				};
             `,
 			expected: []string{"inheritance cycle detected"},
 		},
@@ -59,6 +114,7 @@ func TestSemanticAnalysis(t *testing.T) {
 			code: `
                 class Main {
                     test(): String { 5 };
+					main(): Object { 0 };
                 };
             `,
 			expected: []string{"method test is expected to return String, found Int"},
@@ -70,9 +126,10 @@ func TestSemanticAnalysis(t *testing.T) {
 			code: `
                 class Main {
                     x: Int;
-                    test(): Int {
+                    test(): String {
                         let x: String <- "test" in x
                     };
+					main(): Object { 0 };
                 };
             `,
 			expected: []string{},
@@ -82,6 +139,7 @@ func TestSemanticAnalysis(t *testing.T) {
 			code: `
                 class Main {
                     x: Int <- "hello";
+					main(): Object { 0 };
                 };
             `,
 			expected: []string{"attribute x cannot be of type String, expected Int"},
@@ -95,6 +153,7 @@ func TestSemanticAnalysis(t *testing.T) {
                     test(): Int {
                         "string" + 5
                     };
+					main(): Object { 0 };
                 };
             `,
 			expected: []string{"arithmetic operation on non-Int types: String + Int"},
@@ -106,6 +165,7 @@ func TestSemanticAnalysis(t *testing.T) {
                     test(): Bool {
                         5 < "string"
                     };
+					main(): Object { 0 };
                 };
             `,
 			expected: []string{"comparison between incompatible types: Int < String"},
@@ -119,23 +179,25 @@ func TestSemanticAnalysis(t *testing.T) {
                     test(): SELF_TYPE {
                         new SELF_TYPE
                     };
+					main(): Object { 0 };
                 };
             `,
 			expected: []string(nil),
 		},
 		{
-			name: "Invalid SELF_TYPE usage",
+			name: "Valid SELF_TYPE usage",
 			code: `
                 class Main {
                     test(): SELF_TYPE {
                         new SELF_TYPE
                     };
+					main(): Object { 0 };
                 };
                 class Other {
                     x: Main <- (new Main).test();
                 };
             `,
-			expected: []string(nil), // Should be valid
+			expected: []string(nil),
 		},
 
 		// Let Expression Tests
@@ -146,6 +208,7 @@ func TestSemanticAnalysis(t *testing.T) {
                     test(): Int {
                         let x: Int <- "string" in x
                     };
+					main(): Object { 0 };
                 };
             `,
 			expected: []string{"Let binding with wrong type"},
@@ -159,6 +222,7 @@ func TestSemanticAnalysis(t *testing.T) {
                     test(): Object {
                         (new Main).undefined_method()
                     };
+					main(): Object { 0 };
                 };
             `,
 			expected: []string{"undefined method undefined_method in Main"},
@@ -175,6 +239,7 @@ func TestSemanticAnalysis(t *testing.T) {
                             z: Object => 2;
                         esac
                     };
+					main(): Object { 0 };
                 };
             `,
 			expected: []string{"duplicate branch type Object in case expression"},
@@ -188,9 +253,10 @@ func TestSemanticAnalysis(t *testing.T) {
                             y: UndefinedType => 1;
                         esac
                     };
+					main(): Object { 0 };
                 };
             `,
-			expected: []string{"undefined type UndefinedType in case expression"},
+			expected: []string{"undefined type UndefinedType in case branch"},
 		},
 
 		// Object and IO method dispatch tests
@@ -201,9 +267,22 @@ func TestSemanticAnalysis(t *testing.T) {
                     test(): Object {
                         (new Main)@Object.abort()
                     };
+					main(): Object { 0 };
                 };
             `,
-			expected: []string(nil), // Should be valid
+			expected: []string(nil),
+		},
+		{
+			name: "Valid Object method dispatch 2",
+			code: `
+                class Main {
+                    test(): Object {
+                        (new Main).abort()
+                    };
+					main(): Object { 0 };
+                };
+            `,
+			expected: []string(nil),
 		},
 		{
 			name: "Invalid static dispatch method",
@@ -212,6 +291,7 @@ func TestSemanticAnalysis(t *testing.T) {
                     test(): Object {
                         (new Main)@Object.invalid_method()
                     };
+					main(): Object { 0 };
                 };
             `,
 			expected: []string{"undefined method invalid_method in Object"},
@@ -223,6 +303,7 @@ func TestSemanticAnalysis(t *testing.T) {
                     test(): IO {
                         (new IO).out_string("Hello")
                     };
+					main(): Object { 0 };
                 };
             `,
 			expected: []string(nil), // Should be valid
@@ -247,12 +328,22 @@ func TestSemanticAnalysis(t *testing.T) {
             `,
 			expected: []string{"main method must have 0 parameters"},
 		},
+		{
+			name: "undefined type in attribute",
+			code: `
+                class Main {
+                    x: A;
+					main(): Object { 0 };
+                };
+            `,
+			expected: []string{"undefined type A for attribute x"},
+		},
 	}
 
-	testNum := 3
+	// testNum := 20
 
-	for _, tt := range tests[testNum : testNum+1] {
-		// for _, tt := range tests {
+	// for _, tt := range tests[testNum : testNum+1] {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := parser.New(lexer.NewLexer(strings.NewReader(tt.code)))
 			program := p.ParseProgram()
