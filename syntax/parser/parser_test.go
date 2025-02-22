@@ -25,31 +25,72 @@ func checkParserErrors(t *testing.T, p *Parser, i int) {
 
 func TestClassParser(t *testing.T) {
 	tests := []struct {
-		input          string
-		expectedName   string
-		expectedParent string
-		shouldFail     bool
-		errorContains  string
+		input            string
+		expectedName     string
+		expectedParent   string
+		shouldFail       bool
+		errorContains    string
+		expectedFeatures []struct {
+			featureType string
+			name        string
+			formals     []struct {
+				name string
+				typ  string
+			}
+			typ        string
+			expression string
+		}
 	}{
 		{
 			input:          "class Main {};",
 			expectedName:   "Main",
 			expectedParent: "",
+			expectedFeatures: []struct {
+				featureType string
+				name        string
+				formals     []struct {
+					name string
+					typ  string
+				}
+				typ        string
+				expression string
+			}{},
 		},
 		{
 			input:          "class A {age:Int<-30;};",
 			expectedName:   "A",
 			expectedParent: "",
+			expectedFeatures: []struct {
+				featureType string
+				name        string
+				formals     []struct{ name, typ string }
+				typ         string
+				expression  string
+			}{{featureType: "attribute", name: "age", typ: "Int", expression: "30"}},
 		},
 		{
 			input:          "class B {func(): Int { 5 };};",
 			expectedName:   "B",
 			expectedParent: "",
+			expectedFeatures: []struct {
+				featureType string
+				name        string
+				formals     []struct{ name, typ string }
+				typ         string
+				expression  string
+			}{{featureType: "method", name: "func", typ: "Int", expression: "5"}},
 		},
 		{
 			input:          "class B inherits A {func(): Object { 10 };};",
 			expectedName:   "B",
 			expectedParent: "A",
+			expectedFeatures: []struct {
+				featureType string
+				name        string
+				formals     []struct{ name, typ string }
+				typ         string
+				expression  string
+			}{{featureType: "method", name: "func", typ: "Object", expression: "10"}},
 		},
 		{
 			input: `class Complex {
@@ -60,6 +101,18 @@ func TestClassParser(t *testing.T) {
 			};`,
 			expectedName:   "Complex",
 			expectedParent: "",
+			expectedFeatures: []struct {
+				featureType string
+				name        string
+				formals     []struct{ name, typ string }
+				typ         string
+				expression  string
+			}{
+				{featureType: "attribute", name: "x", typ: "Int", expression: "5"},
+				{featureType: "attribute", name: "y", typ: "Int", expression: "10"},
+				{featureType: "method", name: "init", typ: "Complex", expression: "self"},
+				{featureType: "method", name: "add", formals: []struct{ name, typ string }{{name: "other", typ: "Complex"}}, typ: "Complex", expression: "self"},
+			},
 		},
 		{
 			input:          `class D inherits C inherits B {};`,
@@ -76,6 +129,17 @@ func TestClassParser(t *testing.T) {
 			};`,
 			expectedName:   "List",
 			expectedParent: "Collection",
+			expectedFeatures: []struct {
+				featureType string
+				name        string
+				formals     []struct{ name, typ string }
+				typ         string
+				expression  string
+			}{
+				{featureType: "attribute", name: "head", typ: "Int"},
+				{featureType: "attribute", name: "tail", typ: "List"},
+				{featureType: "method", name: "cons", formals: []struct{ name, typ string }{{name: "x", typ: "Int"}}, typ: "List", expression: "self"},
+			},
 		},
 		{
 			input:          `class 123Invalid {};`,
@@ -83,6 +147,22 @@ func TestClassParser(t *testing.T) {
 			errorContains:  "Expected next token to be TYPEID",
 			expectedName:   "",
 			expectedParent: "",
+		},
+		{
+			input: `
+                class Main {
+                    test(): String { 5 };
+                };
+            `,
+			expectedName:   "Main",
+			expectedParent: "",
+			expectedFeatures: []struct {
+				featureType string
+				name        string
+				formals     []struct{ name, typ string }
+				typ         string
+				expression  string
+			}{{featureType: "method", name: "test", typ: "String", expression: "5"}},
 		},
 	}
 
@@ -127,6 +207,65 @@ func TestClassParser(t *testing.T) {
 		} else if tt.expectedParent != "" {
 			t.Fatalf("[%q]: expected class parent to be %q got nil",
 				tt.input, tt.expectedParent)
+		}
+
+		if len(class.Features) != len(tt.expectedFeatures) {
+			t.Fatalf("[%q]: expected %d features, got %d", tt.input, len(tt.expectedFeatures), len(class.Features))
+		}
+
+		for j, expectedFeature := range tt.expectedFeatures {
+			actualFeature := class.Features[j]
+
+			switch expectedFeature.featureType {
+			case "method":
+				method, ok := actualFeature.(*ast.Method)
+				if !ok {
+					t.Fatalf("[%q] feature [%d]: expected method, got %T", tt.input, j, actualFeature)
+				}
+				if method.Name.Value != expectedFeature.name {
+					t.Fatalf("[%q] feature [%d]: expected method name %q, got %q", tt.input, j, expectedFeature.name, method.Name.Value)
+				}
+				if method.TypeDecl.Value != expectedFeature.typ {
+					t.Fatalf("[%q] feature [%d]: expected method return type %q, got %q", tt.input, j, expectedFeature.typ, method.TypeDecl.Value)
+				}
+				if len(method.Formals) != len(expectedFeature.formals) {
+					t.Fatalf("[%q] feature [%d]: expected %d formals, got %d", tt.input, j, len(expectedFeature.formals), len(method.Formals))
+				}
+				for k, expectedFormal := range expectedFeature.formals {
+					if method.Formals[k].Name.Value != expectedFormal.name {
+						t.Fatalf("[%q] feature [%d] formal [%d]: expected name %q, got %q", tt.input, j, k, expectedFormal.name, method.Formals[k].Name.Value)
+					}
+					if method.Formals[k].TypeDecl.Value != expectedFormal.typ {
+						t.Fatalf("[%q] feature [%d] formal [%d]: expected type %q, got %q", tt.input, j, k, expectedFormal.typ, method.Formals[k].TypeDecl.Value)
+					}
+				}
+
+				actualExpression := SerializeExpression(method.Expression)
+				if actualExpression != expectedFeature.expression {
+					t.Fatalf("[%q] feature [%d]: expected expression %q, got %q", tt.input, j, expectedFeature.expression, actualExpression)
+
+				}
+
+			case "attribute":
+				attribute, ok := actualFeature.(*ast.Attribute)
+				if !ok {
+					t.Fatalf("[%q] feature [%d]: expected attribute, got %T", tt.input, j, actualFeature)
+				}
+				if attribute.Name.Value != expectedFeature.name {
+					t.Fatalf("[%q] feature [%d]: expected attribute name %q, got %q", tt.input, j, expectedFeature.name, attribute.Name.Value)
+				}
+				if attribute.TypeDecl.Value != expectedFeature.typ {
+					t.Fatalf("[%q] feature [%d]: expected attribute type %q, got %q", tt.input, j, expectedFeature.typ, attribute.TypeDecl.Value)
+				}
+				if expectedFeature.expression != "" {
+					actualExpression := SerializeExpression(attribute.Expression)
+					if actualExpression != expectedFeature.expression {
+						t.Fatalf("[%q] feature [%d]: expected expression %q, got %q", tt.input, j, expectedFeature.expression, actualExpression)
+					}
+				}
+			default:
+				t.Fatalf("[%q] feature [%d]: unknown feature type %q", tt.input, j, expectedFeature.featureType)
+			}
 		}
 	}
 }
@@ -253,6 +392,16 @@ func TestMethodParsing(t *testing.T) {
 			expectedFormalTypes: []string{},
 			expectedMethodType:  "Int",
 			expectedExpression:  "{ if true then { let x : Int <- 1 in (x + 2); } else { let y : Int <- 3 in (y + 4); } fi; }",
+		},
+		{
+			input: `
+                    test(): String { 5 };
+            `,
+			expectedMethodName:  "test",
+			expectedFormalNames: []string{},
+			expectedFormalTypes: []string{},
+			expectedMethodType:  "String",
+			expectedExpression:  "5",
 		},
 	}
 
