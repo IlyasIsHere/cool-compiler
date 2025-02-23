@@ -1,10 +1,8 @@
-package semant_test
+package semant
 
 import (
 	"cool-compiler/lexer"
 	"cool-compiler/parser"
-	"cool-compiler/semant"
-	"fmt"
 	"strings"
 	"testing"
 )
@@ -395,6 +393,43 @@ func TestSemanticAnalysis(t *testing.T) {
 			expected: []string{"undefined type UndefinedType in let binding"},
 		},
 		{
+			name: "Assignment to undeclared variable",
+			code: `
+                class Main {
+                    main(): Object {
+                        y <- 1
+                    };
+                };
+            `,
+			expected: []string{"undefined identifier y in assignment"},
+		},
+		{
+			name: "Assignment to attribute in current class",
+			code: `
+                class Main {
+                    x: Int;
+                    main(): Object {
+                        x <- 1
+                    };
+                };
+            `,
+			expected: []string{},
+		},
+		{
+			name: "Assignment to inherited attribute",
+			code: withMainClass(`
+                class A {
+                    x: Int;
+                };
+                class B inherits A {
+                    main(): Object {
+                        x <- 1
+                    };
+                };
+            `),
+			expected: []string{},
+		},
+		{
 			name: "Assignment type mismatch",
 			code: `
                 class Main {
@@ -407,15 +442,15 @@ func TestSemanticAnalysis(t *testing.T) {
 			expected: []string{"type mismatch in assignment: variable 'x' has type Int but was assigned value of type String"},
 		},
 		{
-			name: "Assignment to undefined variable",
+			name: "Assignment to self",
 			code: `
-                class Main {
-                    main(): Object {
-                        y <- 1
-                    };
-                };
-            `,
-			expected: []string{"undefined identifier y in assignment"},
+				class Main {
+					main(): Object {
+						self <- new Main
+					};
+				};
+			`,
+			expected: []string{"cannot assign to 'self'"},
 		},
 		{
 			name: "Method call on undefined object",
@@ -559,9 +594,52 @@ func TestSemanticAnalysis(t *testing.T) {
 			`),
 			expected: []string{"method foo overrides parent method but parameter 1 has different type (String vs Int)"},
 		},
+		{
+			name: "self as formal parameter",
+			code: `
+				class Main {
+					test(self: Int): Object { 0 };
+                    main(): String { "hello" };
+				};
+			`,
+			expected: []string{"cannot use 'self' as formal parameter"},
+		},
+		{
+			name: "undefined method return type",
+			code: `
+				class Main {
+					test(var: Int): Ffldskj { 0 };
+                    main(): Dflkjs { "hello" };
+				};
+			`,
+			expected: []string{
+				"undefined return type Ffldskj for method test",
+				"undefined return type Dflkjs for method main",
+			},
+		},
+		{
+			name: "SELF_TYPE as formal parameter",
+			code: `
+				class Main {
+					mymethod(x: SELF_TYPE): Object { 0 };
+                    main(): IO { { new IO; } };
+				};
+			`,
+			expected: []string{"SELF_TYPE is not allowed as formal parameter type"},
+		},
+		{
+			name: "Attribute named self",
+			code: `
+				class Main {
+					self: Int;
+					main(): Object { 0 };
+				};
+			`,
+			expected: []string{"cannot have attribute named 'self'"},
+		},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := parser.New(lexer.NewLexer(strings.NewReader(tt.code)))
 			program := p.ParseProgram()
@@ -569,18 +647,14 @@ func TestSemanticAnalysis(t *testing.T) {
 				t.Fatalf("parser errors: %v", p.Errors())
 			}
 
-			analyser := semant.NewSemanticAnalyser()
+			analyser := NewSemanticAnalyser()
 			analyser.Analyze(program)
 
-			// Printing the errors
-			fmt.Printf("Semantic errors:\n")
-			for _, err := range analyser.Errors() {
-				fmt.Printf("  %s\n", err)
-			}
-
+			failed := false
 			// Verify expected errors
 			if len(tt.expected) != len(analyser.Errors()) {
-				t.Errorf("expected %d errors, got %d", len(tt.expected), len(analyser.Errors()))
+				t.Errorf("Test case [%d]: expected %d errors, got %d", i+1, len(tt.expected), len(analyser.Errors()))
+				failed = true
 			}
 
 			for _, expectedErr := range tt.expected {
@@ -592,8 +666,13 @@ func TestSemanticAnalysis(t *testing.T) {
 					}
 				}
 				if !found {
-					t.Errorf("missing expected error containing: %q", expectedErr)
+					t.Errorf("Test case [%d]: missing expected error containing: %q", i+1, expectedErr)
+					failed = true
 				}
+			}
+
+			if failed {
+				t.Logf("Test case [%d] semantic errors:\n%s", i+1, strings.Join(analyser.Errors(), "\n"))
 			}
 		})
 	}

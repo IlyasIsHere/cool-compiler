@@ -4,6 +4,7 @@ import (
 	"cool-compiler/ast"
 	"cool-compiler/lexer"
 	"fmt"
+	"reflect"
 	"strconv"
 )
 
@@ -135,7 +136,7 @@ func (p *Parser) ParseProgram() *ast.Program {
 		c := p.ParseClass()
 
 		if !p.expectAndPeek(lexer.SEMI) {
-			continue
+			break
 		}
 		p.nextToken()
 		prog.Classes = append(prog.Classes, c)
@@ -177,7 +178,11 @@ func (p *Parser) ParseClass() *ast.Class {
 	}
 	for !p.peekTokenIs(lexer.RBRACE) {
 		p.nextToken()
-		c.Features = append(c.Features, p.parseFeature())
+		feature := p.parseFeature()
+		if reflect.ValueOf(feature).IsNil() {
+			return nil
+		}
+		c.Features = append(c.Features, feature)
 		if !p.expectAndPeek(lexer.SEMI) {
 			return nil
 		}

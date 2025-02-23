@@ -136,6 +136,14 @@ func (sa *SemanticAnalyser) typeCheckMethod(method *ast.Method, st *SymbolTable)
 		methodSt.AddEntry(formal.Name.Value, &SymbolEntry{Token: formal.Token, Type: formal.TypeDecl.Value})
 	}
 
+	// Check if return type exists
+	if method.TypeDecl.Value != "SELF_TYPE" {
+		if _, ok := sa.globalSymbolTable.Lookup(method.TypeDecl.Value); !ok {
+			sa.errors = append(sa.errors, fmt.Sprintf("undefined return type %s for method %s", method.TypeDecl.Value, method.Name.Value))
+			return
+		}
+	}
+
 	methodExpressionType := sa.getExpressionType(method.Expression, methodSt)
 	expectedReturnType := method.TypeDecl.Value
 	if expectedReturnType == "SELF_TYPE" {
@@ -448,22 +456,6 @@ func (sa *SemanticAnalyser) buildSymbolTables(program *ast.Program) {
 					continue
 				}
 				classEntry.Scope.AddEntry(f.Name.Value, &SymbolEntry{Type: "Method", Token: f.Name.Token, Scope: methodST, Method: f})
-
-				// // Check if this method overrides a parent's method
-				// currentClass := class.Name.Value
-				// parentClass := sa.inheritanceGraph.edges[currentClass]
-				// for parentClass != "" {
-				// 	if parentEntry, ok := sa.globalSymbolTable.Lookup(parentClass); ok {
-				// 		if parentMethodEntry, exists := parentEntry.Scope.Lookup(f.Name.Value); exists && parentMethodEntry.Type == "Method" {
-				// 			sa.validateMethodOverride(f, parentMethodEntry.Method)
-				// 			break // Stop after checking the first ancestor that has the method
-				// 		}
-				// 		parentClass = sa.inheritanceGraph.edges[parentClass]
-				// 	} else {
-				// 		break
-				// 	}
-				// }
-
 			}
 		}
 	}
