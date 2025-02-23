@@ -60,8 +60,8 @@ func (sa *SemanticAnalyser) Errors() []string {
 
 func (sa *SemanticAnalyser) Analyze(program *ast.Program) {
 	sa.buildClassesSymboltables(program)
-	sa.buildSymbolTables(program)
 	sa.buildInheritanceGraph(program)
+	sa.buildSymbolTables(program)
 	sa.validateMainClass(program)
 	sa.typeCheck(program)
 }
@@ -426,6 +426,10 @@ func (sa *SemanticAnalyser) buildSymbolTables(program *ast.Program) {
 		for _, feature := range class.Features {
 			switch f := feature.(type) {
 			case *ast.Attribute:
+				if sa.isAttributeRedefined(f.Name.Value, classEntry.Scope.parent) {
+					sa.errors = append(sa.errors, fmt.Sprintf("attribute %s is already defined in a parent class of %s", f.Name.Value, class.Name.Value))
+					continue
+				}
 				if _, ok := classEntry.Scope.Lookup(f.Name.Value); ok {
 					sa.errors = append(sa.errors, fmt.Sprintf("attribute %s is already defined in class %s", f.Name.Value, class.Name.Value))
 					continue
@@ -729,6 +733,14 @@ func (sa *SemanticAnalyser) getDotCallExpressionType(dotCall *ast.DotCallExpress
 	var dispatchType string  // Type to lookup method in (for static dispatch)
 	if dotCall.Type != nil { // Static Dispatch: expr@Type.method(...)
 		dispatchType = dotCall.Type.Value
+
+		// Check if the static dispatch type exists
+		_, typeFound := sa.globalSymbolTable.Lookup(dispatchType)
+		if !typeFound {
+			sa.errors = append(sa.errors, fmt.Sprintf("undefined type %s in static dispatch", dispatchType))
+			return "Object"
+		}
+
 		if dispatchType == "SELF_TYPE" {
 			dispatchType = sa.currentClass // Resolve static SELF_TYPE if needed (though semantically less common)
 		}
@@ -783,6 +795,11 @@ func (sa *SemanticAnalyser) getDotCallExpressionType(dotCall *ast.DotCallExpress
 
 func (sa *SemanticAnalyser) buildInheritanceGraph(program *ast.Program) {
 	for _, class := range program.Classes {
+		className := class.Name.Value
+		if className == "Object" {
+			continue // error would have already been reported before
+		}
+
 		parentName := "Object"
 		if class.Parent != nil {
 			parentName = class.Parent.Value
@@ -867,4 +884,14 @@ func (sa *SemanticAnalyser) validateMainClass(program *ast.Program) {
 	if len(mainMethod.Method.Formals) > 0 {
 		sa.errors = append(sa.errors, "main method must have 0 parameters")
 	}
+}
+
+func (sa *SemanticAnalyser) isAttributeRedefined(attrName string, parentScope *SymbolTable) bool {
+	if parentScope == nil {
+		return false
+	}
+	if entry, ok := parentScope.Lookup(attrName); ok && entry.Type == "Attribute" {
+		return true
+	}
+	return sa.isAttributeRedefined(attrName, parentScope.parent)
 }

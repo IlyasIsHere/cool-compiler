@@ -338,9 +338,230 @@ func TestSemanticAnalysis(t *testing.T) {
             `,
 			expected: []string{"undefined type A for attribute x"},
 		},
+		{
+			name: "Attribute redefinition in child class",
+			code: withMainClass(`
+                class A {
+                    x: Int;
+                };
+                class B inherits A {
+                    x: String;
+                };
+            `),
+			expected: []string{"attribute x is already defined in a parent class of B"},
+		},
+		// {
+		// 	name: "Redefine SELF_TYPE",
+		// 	code: `
+		//         class SELF_TYPE {
+		//             main(): Object { 0 };
+		//         };
+		//         class Main {
+		//             main(): Object { 0 };
+		//         };
+		//     `,
+		// 	expected: []string{"cannot inherit from special type SELF_TYPE", "redefinition of basic class SELF_TYPE"},
+		// },
+		// {
+		// 	name: "Inheritance from SELF_TYPE",
+		// 	code: `
+		//         class A inherits SELF_TYPE {};
+		//         class Main {
+		//             main(): Object { 0 };
+		//         };
+		//     `,
+		// 	expected: []string{"cannot inherit from special type SELF_TYPE"},
+		// },
+		{
+			name: "Let with no init expression, undefined type",
+			code: `
+                class Main {
+                    main(): Object {
+                        let x: UndefinedType in 0
+                    };
+                };
+            `,
+			expected: []string{"undefined type UndefinedType in let binding"},
+		},
+		{
+			name: "Let with init expression, undefined type",
+			code: `
+                class Main {
+                    main(): Object {
+                        let x: UndefinedType <- 1 in 0
+                    };
+                };
+            `,
+			expected: []string{"undefined type UndefinedType in let binding"},
+		},
+		{
+			name: "Assignment type mismatch",
+			code: `
+                class Main {
+                    x: Int;
+                    main(): Object {
+                        x <- "string"
+                    };
+                };
+            `,
+			expected: []string{"type mismatch in assignment: variable 'x' has type Int but was assigned value of type String"},
+		},
+		{
+			name: "Assignment to undefined variable",
+			code: `
+                class Main {
+                    main(): Object {
+                        y <- 1
+                    };
+                };
+            `,
+			expected: []string{"undefined identifier y in assignment"},
+		},
+		{
+			name: "Method call on undefined object",
+			code: `
+                class Main {
+                    main(): Object {
+                        a.test()
+                    };
+                };
+            `,
+			expected: []string{"undefined identifier a", "undefined method test in Object"},
+		},
+		{
+			name: "Static dispatch on undefined class",
+			code: `
+                class Main {
+                    main(): Object {
+                        (new Main)@Undefined.test()
+                    };
+                };
+            `,
+			expected: []string{"undefined type Undefined in static dispatch"},
+		},
+		{
+			name: "if statement with non-boolean condition",
+			code: `
+                class Main {
+                    main(): Object {
+                        if 1 then 1 else 0 fi
+                    };
+                };
+            `,
+			expected: []string{"condition of if statement is of type Int, expected Bool"},
+		},
+		{
+			name: "while loop with non-boolean condition",
+			code: `
+                class Main {
+                    main(): Object {
+                        while 1 loop 0 pool
+                    };
+                };
+            `,
+			expected: []string{"condition of if statement is of type Int, expected Bool"},
+		},
+		{
+			name: "redefine object",
+			code: `
+				class Object {};
+                class Main {
+                    main(): Object {
+						0
+					 };
+                };
+            `,
+			expected: []string{"class Object is already defined"},
+		},
+		{
+			name: "redefine IO",
+			code: `
+				class IO {};
+                class Main {
+                    main(): Object {
+						0
+					 };
+                };
+            `,
+			expected: []string{"class IO is already defined"},
+		},
+		{
+			name: "Valid isvoid check",
+			code: `
+                class Main {
+                    main(): Object {
+                        isvoid (new Main)
+                    };
+                };
+            `,
+			expected: []string{},
+		},
+		{
+			name: "Invalid void check",
+			code: `
+                class Main {
+                    main(): Object {
+                        isvoid 5
+                    };
+                };
+            `,
+			expected: []string{},
+		},
+		{
+			name: "Call method with wrong number of arguments",
+			code: `
+				class A {
+					foo(x: Int): Int { x };
+				};
+                class Main {
+                    main(): Object {
+                        (new A).foo()
+                    };
+                };
+            `,
+			expected: []string{"method foo expects 1 arguments, but got 0"},
+		},
+		{
+			name: "Call method with wrong argument type",
+			code: `
+				class A {
+					foo(x: Int): Int { x };
+				};
+                class Main {
+                    main(): Object {
+                        (new A).foo("string")
+                    };
+                };
+            `,
+			expected: []string{"argument 1 of method foo expects type Int, but got String"},
+		},
+		{
+			name: "Override method with wrong number of arguments",
+			code: withMainClass(`
+				class A {
+					foo(x: Int): Int { x };
+				};
+				class B inherits A {
+					foo(): Int { 0 };
+				};
+			`),
+			expected: []string{"method foo overrides parent method but has different number of parameters (0 vs 1)"},
+		},
+		{
+			name: "Override method with wrong argument type",
+			code: withMainClass(`
+				class A {
+					foo(x: Int): Int { x };
+				};
+				class B inherits A {
+					foo(x: String): Int { 0 };
+				};
+			`),
+			expected: []string{"method foo overrides parent method but parameter 1 has different type (String vs Int)"},
+		},
 	}
 
-	// testNum := 20
+	// testNum := len(tests) - 1
 
 	// for _, tt := range tests[testNum : testNum+1] {
 	for _, tt := range tests {
