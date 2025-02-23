@@ -561,9 +561,6 @@ func TestSemanticAnalysis(t *testing.T) {
 		},
 	}
 
-	// testNum := len(tests) - 1
-
-	// for _, tt := range tests[testNum : testNum+1] {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := parser.New(lexer.NewLexer(strings.NewReader(tt.code)))

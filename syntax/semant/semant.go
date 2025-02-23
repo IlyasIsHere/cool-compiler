@@ -190,8 +190,6 @@ func (sa *SemanticAnalyser) getExpressionType(expression ast.Expression, st *Sym
 	}
 }
 
-// TODO: handle "main" function requirements
-
 func (sa *SemanticAnalyser) getObjectIdentifierType(identifier *ast.ObjectIdentifier, st *SymbolTable) string {
 	entry, ok := st.Lookup(identifier.Value)
 	if !ok {
@@ -438,26 +436,34 @@ func (sa *SemanticAnalyser) buildSymbolTables(program *ast.Program) {
 			case *ast.Method:
 				methodST := NewSymbolTable(classEntry.Scope)
 
+				redefined, parentEntry := sa.isMethodRedefined(f.Name.Value, classEntry.Scope.parent)
+				if redefined {
+					sa.validateMethodOverride(f, parentEntry.Method)
+					classEntry.Scope.AddEntry(f.Name.Value, &SymbolEntry{Type: "Method", Token: f.Name.Token, Scope: methodST, Method: f})
+					continue
+				}
+
 				if _, ok := classEntry.Scope.Lookup(f.Name.Value); ok {
 					sa.errors = append(sa.errors, fmt.Sprintf("method %s is already defined in class %s", f.Name.Value, class.Name.Value))
 					continue
 				}
 				classEntry.Scope.AddEntry(f.Name.Value, &SymbolEntry{Type: "Method", Token: f.Name.Token, Scope: methodST, Method: f})
 
-				// Check if this method overrides a parent's method
-				currentClass := class.Name.Value
-				parentClass := sa.inheritanceGraph.edges[currentClass]
-				for parentClass != "" {
-					if parentEntry, ok := sa.globalSymbolTable.Lookup(parentClass); ok {
-						if parentMethodEntry, exists := parentEntry.Scope.Lookup(f.Name.Value); exists && parentMethodEntry.Type == "Method" {
-							sa.validateMethodOverride(f, parentMethodEntry.Method)
-							break // Stop after checking the first ancestor that has the method
-						}
-						parentClass = sa.inheritanceGraph.edges[parentClass]
-					} else {
-						break
-					}
-				}
+				// // Check if this method overrides a parent's method
+				// currentClass := class.Name.Value
+				// parentClass := sa.inheritanceGraph.edges[currentClass]
+				// for parentClass != "" {
+				// 	if parentEntry, ok := sa.globalSymbolTable.Lookup(parentClass); ok {
+				// 		if parentMethodEntry, exists := parentEntry.Scope.Lookup(f.Name.Value); exists && parentMethodEntry.Type == "Method" {
+				// 			sa.validateMethodOverride(f, parentMethodEntry.Method)
+				// 			break // Stop after checking the first ancestor that has the method
+				// 		}
+				// 		parentClass = sa.inheritanceGraph.edges[parentClass]
+				// 	} else {
+				// 		break
+				// 	}
+				// }
+
 			}
 		}
 	}
@@ -894,4 +900,14 @@ func (sa *SemanticAnalyser) isAttributeRedefined(attrName string, parentScope *S
 		return true
 	}
 	return sa.isAttributeRedefined(attrName, parentScope.parent)
+}
+
+func (sa *SemanticAnalyser) isMethodRedefined(methodName string, parentScope *SymbolTable) (bool, *SymbolEntry) {
+	if parentScope == nil {
+		return false, nil
+	}
+	if entry, ok := parentScope.Lookup(methodName); ok && entry.Type == "Method" {
+		return true, entry
+	}
+	return sa.isMethodRedefined(methodName, parentScope.parent)
 }
