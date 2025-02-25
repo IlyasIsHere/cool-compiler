@@ -58,11 +58,18 @@ func (sa *SemanticAnalyser) Errors() []string {
 	return sa.errors
 }
 
+func (sa *SemanticAnalyser) GetSymbolTable() *SymbolTable {
+	return sa.globalSymbolTable
+}
+func (sa *SemanticAnalyser) GetInheritanceGraph() *InheritanceGraph {
+	return sa.inheritanceGraph
+}
+
 func (sa *SemanticAnalyser) Analyze(program *ast.Program) {
 	sa.buildClassesSymboltables(program)
 	sa.buildInheritanceGraph(program)
 	sa.buildSymbolTables(program)
-	sa.validateMainClass(program)
+	sa.validateMainClass()
 	sa.typeCheck(program)
 }
 
@@ -863,7 +870,7 @@ func (sa *SemanticAnalyser) validateMethodOverride(method *ast.Method, parentMet
 	return true
 }
 
-func (sa *SemanticAnalyser) validateMainClass(program *ast.Program) {
+func (sa *SemanticAnalyser) validateMainClass() {
 	mainEntry, exists := sa.globalSymbolTable.Lookup("Main")
 	if !exists {
 		sa.errors = append(sa.errors, "program must have a class Main")

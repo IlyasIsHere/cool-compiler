@@ -26,6 +26,13 @@ func (ig *InheritanceGraph) AddNode(className string, class *ast.Class) {
 	ig.nodes[className] = class
 }
 
+func (ig *InheritanceGraph) GetNode(className string) *ast.Class {
+	if node, ok := ig.nodes[className]; ok {
+		return node
+	}
+	return nil
+}
+
 // detectCycle returns true and the cycle path if there's a cycle
 func (ig *InheritanceGraph) detectCycle(start string) (bool, []string) {
 	visited := make(map[string]bool)
@@ -112,4 +119,10 @@ func (ig *InheritanceGraph) FindLCA(type1, type2 string) string {
 		}
 		current = parent
 	}
+}
+
+// GetParent returns the parent class name of a given class, if it exists.
+func (ig *InheritanceGraph) GetParent(className string) (string, bool) {
+	parent, exists := ig.edges[className]
+	return parent, exists
 }
