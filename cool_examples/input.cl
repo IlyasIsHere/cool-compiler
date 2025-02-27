@@ -14,3 +14,4 @@ class Sum {
         num1 + num2
     };
 };
+

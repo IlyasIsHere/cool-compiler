@@ -6,7 +6,9 @@ import (
 	"cool-compiler/parser"
 	"cool-compiler/semant"
 	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"strings"
 )
 
@@ -17,6 +19,7 @@ func main() {
 	}
 
 	input, err := os.ReadFile(os.Args[1])
+	// input, err := os.ReadFile("test.cl")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 		os.Exit(1)
@@ -56,11 +59,21 @@ func main() {
 	outputFilename := "output.ll"
 	err = os.WriteFile(outputFilename, []byte(module.String()), 0644)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing output file: %v\n", err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
 	fmt.Printf("LLVM IR code generated successfully and written to %s\n", outputFilename)
-	fmt.Println("To compile with clang, install LLVM and Clang, then run:")
-	fmt.Printf("clang %s runtime.c -o output\n", outputFilename)
+
+	// Try to compile with clang if available, including the runtime.c file
+	var cmd *exec.Cmd
+	cmd = exec.Command("clang", outputFilename, "runtime/runtime.c", "-o", "output.exe")
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	if err != nil {
+		fmt.Printf("Warning: Compilation with clang failed. You may need to install LLVM/Clang.\n")
+	} else {
+		fmt.Println("Compilation successful. Executable: output.exe")
+	}
 }

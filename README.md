@@ -1,6 +1,6 @@
-# cool-compiler
-A GoLang compiler for COOL (Classroom Object-Oriented Language).
+# COOL Compiler
 
+A compiler for the Classroom Object-Oriented Language (COOL).
 
 # Running Tests
 
