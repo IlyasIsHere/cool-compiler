@@ -165,6 +165,9 @@ func (sa *SemanticAnalyser) getExpressionType(expression ast.Expression, st *Sym
 	case *ast.IntegerLiteral:
 		return "Int"
 	case *ast.StringLiteral:
+		if len(e.Value) > 1024 {
+			sa.errors = append(sa.errors, "string literal must not be longer than 1024 characters")
+		}
 		return "String"
 	case *ast.BooleanLiteral:
 		return "Bool"

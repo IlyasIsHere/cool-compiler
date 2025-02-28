@@ -29,6 +29,8 @@ type CodeGenerator struct {
 	// Current function being processed
 	CurrentFunc *ir.Func
 
+	CurrentBlock *ir.Block
+
 	// Symbol table for variables in current scope
 	Symbols map[string]value.Value
 
@@ -41,11 +43,19 @@ type CodeGenerator struct {
 	// Program classes from the source code
 	ProgramClasses []*ast.Class
 
+	// Map class names to their AST nodes for efficient lookup
+	ClassNameToAST map[string]*ast.Class
+
 	// AttributeIndices maps class names to a map of attribute names to their indices in the class struct
 	AttributeIndices map[string]map[string]int
 
 	// MethodIndices maps class names to a map of method names to their indices in the vtable
 	MethodIndices map[string]map[string]int
+
+	// Counters for generating unique block names in control structures
+	IfCounter    int
+	WhileCounter int
+	CaseCounter  int
 }
 
 // Generate is the main entry point for code generation
@@ -61,6 +71,16 @@ func Generate(program *ast.Program) (*ir.Module, error) {
 
 	// Store program classes for later reference
 	cg.ProgramClasses = program.Classes
+
+	// Build an efficient mapping of class names to AST nodes
+	for _, class := range program.Classes {
+		cg.ClassNameToAST[class.Name.Value] = class
+	}
+
+	// Add built-in classes to the map as well
+	for _, builtInClass := range cg.BuiltInClasses {
+		cg.ClassNameToAST[builtInClass.Name.Value] = builtInClass
+	}
 
 	// First, generate class structures
 	cg.GenerateClassStructs(program)
@@ -88,8 +108,12 @@ func NewCodeGenerator() *CodeGenerator {
 		StdlibFuncs:      make(map[string]*ir.Func),
 		BuiltInClasses:   []*ast.Class{},
 		ProgramClasses:   []*ast.Class{},
+		ClassNameToAST:   make(map[string]*ast.Class),
 		AttributeIndices: make(map[string]map[string]int),
 		MethodIndices:    make(map[string]map[string]int),
+		IfCounter:        0,
+		WhileCounter:     0,
+		CaseCounter:      0,
 	}
 
 	return cg
@@ -628,6 +652,7 @@ func (cg *CodeGenerator) generateMethod(class *ast.Class, method *ast.Method) {
 
 	// Create entry block
 	entryBlock := methodFunc.NewBlock("entry")
+	cg.CurrentBlock = entryBlock
 
 	// Set up for code generation
 	cg.CurrentFunc = methodFunc
@@ -650,7 +675,7 @@ func (cg *CodeGenerator) generateMethod(class *ast.Class, method *ast.Method) {
 	// Handle SELF_TYPE return values (methods that return self)
 	if method.TypeDecl.Value == "SELF_TYPE" {
 		// When returning SELF_TYPE, return the 'self' parameter
-		entryBlock.NewRet(selfParam)
+		cg.CurrentBlock.NewRet(selfParam)
 		return
 	}
 
@@ -661,27 +686,26 @@ func (cg *CodeGenerator) generateMethod(class *ast.Class, method *ast.Method) {
 			if bodyValue.Type() == types.I32 || bodyValue.Type() == types.I1 {
 				// Boxing primitive values when returning as Object
 				// In a real implementation, would create proper boxed objects
-				bodyValue = entryBlock.NewIntToPtr(bodyValue, ptr)
+				bodyValue = cg.CurrentBlock.NewIntToPtr(bodyValue, ptr)
 			} else if bodyValue.Type() == types.Void {
 				// Handle void return values when pointer expected (common with IO operations)
 				// Return 'self' as a sensible default
-				bodyValue = entryBlock.NewBitCast(selfParam, ptr)
+				bodyValue = cg.CurrentBlock.NewBitCast(selfParam, ptr)
 			} else if _, isOtherPtr := bodyValue.Type().(*types.PointerType); isOtherPtr {
 				// Cast between pointer types
-				bodyValue = entryBlock.NewBitCast(bodyValue, ptr)
+				bodyValue = cg.CurrentBlock.NewBitCast(bodyValue, ptr)
 			}
 		} else if methodFunc.Sig.RetType == types.Void && bodyValue.Type() != types.Void {
 			// If we need to return void but have a value, just ignore the value
-			entryBlock.NewRet(nil)
+			cg.CurrentBlock.NewRet(nil)
 			return
 		} else {
 			// added this to handle the case where the return type is not a pointer
-			bodyValue = entryBlock.NewBitCast(bodyValue, methodFunc.Sig.RetType)
+			bodyValue = cg.CurrentBlock.NewBitCast(bodyValue, methodFunc.Sig.RetType)
 		}
 	}
 
-	// Return the method result
-	entryBlock.NewRet(bodyValue)
+	cg.CurrentBlock.NewRet(bodyValue)
 }
 
 // generateExpression generates code for an expression
@@ -762,7 +786,7 @@ func (cg *CodeGenerator) generateBooleanLiteral(boolLit *ast.BooleanLiteral) val
 // generateObjectAllocation creates a new instance of a class
 func (cg *CodeGenerator) generateObjectAllocation(typeName string) value.Value {
 	// Get the current block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
 	// Get the LLVM struct type for the class
 	classType, exists := cg.TypeMap[typeName]
@@ -815,42 +839,12 @@ func (cg *CodeGenerator) generateObjectAllocation(typeName string) value.Value {
 
 // initializeAttributes initializes all attributes of a class with their default values
 func (cg *CodeGenerator) initializeAttributes(className string, objectPtr value.Value) {
-	// Get the current block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
-	// Find the class in the built-in classes or the program
-	var class *ast.Class
-	for _, builtInClass := range cg.BuiltInClasses {
-		if builtInClass.Name.Value == className {
-			class = builtInClass
-			break
-		}
-	}
-
-	if class == nil {
-		// Look in the program classes (need to add a field to store them)
-		// For now, we'll have to search in the program each time
-		// This could be optimized by storing a map of class names to classes
-		for _, c := range cg.Module.TypeDefs {
-			if c.Name() == className {
-				// Found the class type, now we need to find the class AST node
-				// This is a bit inefficient - in a real implementation, we'd store
-				// a map from class names to class AST nodes
-				// For now, just find the AST node if not a built-in class
-				for _, programClass := range cg.ProgramClasses {
-					if programClass.Name.Value == className {
-						class = programClass
-						break
-					}
-				}
-				break
-			}
-		}
-	}
-
-	if class == nil {
-		// If class is still nil, we couldn't find it - this shouldn't happen
-		// after semantic analysis
+	// Directly look up the class by name using the map - O(1) operation
+	_, exists := cg.ClassNameToAST[className]
+	if !exists {
+		// If not found in the map, this is unexpected
 		return
 	}
 
@@ -877,18 +871,10 @@ func (cg *CodeGenerator) initializeAttributes(className string, objectPtr value.
 
 	// Initialize attributes from parent to child
 	for _, ancestorName := range ancestors {
-		ancestor := findClass(ancestorName, &ast.Program{Classes: cg.ProgramClasses})
-		if ancestor == nil {
-			// Check built-in classes
-			for _, builtInClass := range cg.BuiltInClasses {
-				if builtInClass.Name.Value == ancestorName {
-					ancestor = builtInClass
-					break
-				}
-			}
-			if ancestor == nil {
-				continue // Skip if we can't find the ancestor
-			}
+		// Efficiently lookup the ancestor class - O(1) operation
+		ancestor, exists := cg.ClassNameToAST[ancestorName]
+		if !exists {
+			continue // Skip if we can't find the ancestor
 		}
 
 		// Initialize this class's attributes
@@ -970,8 +956,7 @@ func (cg *CodeGenerator) getObjectRuntimeType(object value.Value, block *ir.Bloc
 
 // generateDynamicDispatch generates code for method dispatch
 func (cg *CodeGenerator) generateDynamicDispatch(object value.Value, methodName string, args []value.Value) value.Value {
-	// Get the current block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
 	// First, we need to load the vtable pointer from the object
 	// In our implementation, the vtable pointer is always the first field of any object
@@ -1118,8 +1103,9 @@ func (cg *CodeGenerator) GenerateMain(program *ast.Program) {
 	mainFunc := cg.Module.NewFunc("main", types.I32)
 	entryBlock := mainFunc.NewBlock("entry")
 
-	// Set the current function for code generation
+	// Set the current function and block for code generation
 	cg.CurrentFunc = mainFunc
+	cg.CurrentBlock = entryBlock
 
 	// Create a new instance of the Main class
 	mainClass, exists := cg.TypeMap["Main"]
@@ -1180,13 +1166,14 @@ func (cg *CodeGenerator) generateObjectIdentifier(identifier *ast.ObjectIdentifi
 		return cg.Symbols["self"] // 'self' should be in the symbol table already
 	}
 
+	block := cg.CurrentBlock
+
 	// Try to find the identifier in the symbol table
 	val, exists := cg.Symbols[identifier.Value]
 	if exists {
 		// Check if the identifier refers to a local variable or parameter (already stored in register)
 		if _, isLocalVar := val.(*ir.InstAlloca); isLocalVar {
 			// For local variables (alloca instructions), we need to load the value
-			block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1] // Get current block
 			load := block.NewLoad(val.Type().(*types.PointerType).ElemType, val)
 			return load
 		}
@@ -1225,9 +1212,6 @@ func (cg *CodeGenerator) generateObjectIdentifier(identifier *ast.ObjectIdentifi
 		panic(fmt.Sprintf("undefined attribute in class %s: %s", className, identifier.Value))
 	}
 
-	// Get the current block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
-
 	// Get the attribute type
 	attributeType := structType.Fields[attrIndex]
 
@@ -1247,7 +1231,7 @@ func (cg *CodeGenerator) generateAssignmentExpression(assign *ast.AssignmentExpr
 	rhsValue := cg.generateExpression(assign.Expression)
 
 	// Get the current basic block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
 	// Check if it's a local variable (in the symbol table)
 	if target, exists := cg.Symbols[assign.Identifier.Value]; exists {
@@ -1327,30 +1311,31 @@ func (cg *CodeGenerator) generateIfExpression(ifExpr *ast.IfExpression) value.Va
 		panic(fmt.Sprintf("condition in if expression must be of boolean type"))
 	}
 
-	// Create the basic blocks for the true, false, and merge paths
+	// Increment the if counter for unique block names
+	cg.IfCounter++
+	counterSuffix := fmt.Sprintf(".%d", cg.IfCounter)
+
+	// Create the basic blocks for the true, false, and merge paths with unique names
 	currentFunc := cg.CurrentFunc
-	trueBlock := currentFunc.NewBlock("if.then")
-	falseBlock := currentFunc.NewBlock("if.else")
-	mergeBlock := currentFunc.NewBlock("if.end")
+	trueBlock := currentFunc.NewBlock("if.then" + counterSuffix)
+	falseBlock := currentFunc.NewBlock("if.else" + counterSuffix)
+	mergeBlock := currentFunc.NewBlock("if.end" + counterSuffix)
 
 	// Create the conditional branch
-	currentBlock := currentFunc.Blocks[len(currentFunc.Blocks)-3] // Get the block before our new ones
-	currentBlock.NewCondBr(condValue, trueBlock, falseBlock)
+	cg.CurrentBlock.NewCondBr(condValue, trueBlock, falseBlock)
 
 	// Generate code for the true branch
-	cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-3] = trueBlock // Set current block to true block
+	cg.CurrentBlock = trueBlock
 	trueValue := cg.generateExpression(ifExpr.Consequence)
-	trueBlock = cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-3] // Get updated true block
-	trueBlock.NewBr(mergeBlock)
+	cg.CurrentBlock.NewBr(mergeBlock)
 
 	// Generate code for the false branch
-	cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-2] = falseBlock // Set current block to false block
+	cg.CurrentBlock = falseBlock
 	falseValue := cg.generateExpression(ifExpr.Alternative)
-	falseBlock = cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-2] // Get updated false block
-	falseBlock.NewBr(mergeBlock)
+	cg.CurrentBlock.NewBr(mergeBlock)
 
 	// Set current block to merge block
-	cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1] = mergeBlock
+	cg.CurrentBlock = mergeBlock
 
 	// Figure out the common type for the result
 	// In COOL, this would be the least common ancestor of the two types
@@ -1366,7 +1351,7 @@ func (cg *CodeGenerator) generateIfExpression(ifExpr *ast.IfExpression) value.Va
 	}
 
 	// Create a PHI node with incoming values right away
-	phi := mergeBlock.NewPhi(
+	phi := cg.CurrentBlock.NewPhi(
 		&ir.Incoming{X: trueValue, Pred: trueBlock},
 		&ir.Incoming{X: falseValue, Pred: falseBlock},
 	)
@@ -1374,23 +1359,28 @@ func (cg *CodeGenerator) generateIfExpression(ifExpr *ast.IfExpression) value.Va
 	// Set the correct type for the PHI node
 	phi.Typ = resultType
 
+	// Return the PHI node as the result of the case expression
 	return phi
 }
 
 // generateWhileExpression creates LLVM IR for a while loop expression
 func (cg *CodeGenerator) generateWhileExpression(whileExpr *ast.WhileExpression) value.Value {
+	// Increment the while counter for unique block names
+	cg.WhileCounter++
+	counterSuffix := fmt.Sprintf(".%d", cg.WhileCounter)
+
 	// Create the basic blocks for the loop
 	currentFunc := cg.CurrentFunc
-	condBlock := currentFunc.NewBlock("while.cond")
-	bodyBlock := currentFunc.NewBlock("while.body")
-	exitBlock := currentFunc.NewBlock("while.exit")
+	condBlock := currentFunc.NewBlock("while.cond" + counterSuffix)
+	bodyBlock := currentFunc.NewBlock("while.body" + counterSuffix)
+	exitBlock := currentFunc.NewBlock("while.exit" + counterSuffix)
 
 	// Get the current block and create a branch to the condition block
-	currentBlock := currentFunc.Blocks[len(currentFunc.Blocks)-3] // Get the block before our new ones
+	currentBlock := cg.CurrentBlock
 	currentBlock.NewBr(condBlock)
 
 	// Set current block to condition block
-	cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-3] = condBlock
+	cg.CurrentBlock = condBlock
 
 	// Generate code for the condition
 	condValue := cg.generateExpression(whileExpr.Condition)
@@ -1435,9 +1425,6 @@ func (cg *CodeGenerator) generateBlockExpression(blockExpr *ast.BlockExpression)
 	for _, expr := range blockExpr.Expressions {
 		// Generate the expression
 		lastValue = cg.generateExpression(expr)
-
-		// Each expression's result is discarded except for the last one
-		// We still generate code for all expressions because they might have side effects
 	}
 
 	// If the block is empty (no expressions), return a void value
@@ -1453,7 +1440,7 @@ func (cg *CodeGenerator) generateBlockExpression(blockExpr *ast.BlockExpression)
 // generateBinaryExpression creates LLVM IR for binary operations
 func (cg *CodeGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) value.Value {
 	// Get the current basic block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
 	// Generate code for the left and right operands
 	leftValue := cg.generateExpression(binExpr.Left)
@@ -1554,7 +1541,7 @@ func (cg *CodeGenerator) generateDotCallExpression(dotCall *ast.DotCallExpressio
 	objectValue := cg.generateExpression(dotCall.Object)
 
 	// Get the current block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
 	// Generate LLVM values for all arguments
 	argValues := make([]value.Value, 0, len(dotCall.Arguments)+1)
@@ -1659,8 +1646,7 @@ func (cg *CodeGenerator) generateDotCallExpression(dotCall *ast.DotCallExpressio
 
 // generateStaticDispatch creates LLVM IR for static dispatch (obj@Type.method())
 func (cg *CodeGenerator) generateStaticDispatch(object value.Value, typeName string, methodName string, args []value.Value) value.Value {
-	// Get the current basic block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
 	// Look up the method in the specified class's vtable
 	// In a static dispatch, we bypass dynamic dispatch and directly call the method of the specified type
@@ -1706,7 +1692,7 @@ func (cg *CodeGenerator) generateStaticDispatch(object value.Value, typeName str
 // generateLetExpression creates LLVM IR for let expressions
 func (cg *CodeGenerator) generateLetExpression(letExpr *ast.LetExpression) value.Value {
 	// Get the current block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
 	// Save the old symbol table to restore after the let expression
 	oldSymbols := make(map[string]value.Value)
@@ -1840,7 +1826,7 @@ func (cg *CodeGenerator) generateNewExpression(newExpr *ast.NewExpression) value
 // generateIsVoidExpression creates LLVM IR for checking if a reference is null
 func (cg *CodeGenerator) generateIsVoidExpression(isVoidExpr *ast.IsVoidExpression) value.Value {
 	// Get the current block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
 	// Generate code for the expression to check
 	exprValue := cg.generateExpression(isVoidExpr.Expression)
@@ -1868,8 +1854,7 @@ func (cg *CodeGenerator) generateIsVoidExpression(isVoidExpr *ast.IsVoidExpressi
 
 // generateUnaryExpression creates LLVM IR for unary operations
 func (cg *CodeGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) value.Value {
-	// Get the current block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
 	// Generate code for the expression being operated on
 	exprValue := cg.generateExpression(unaryExpr.Right)
@@ -1905,6 +1890,10 @@ func (cg *CodeGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression)
 
 // generateCaseExpression creates LLVM IR for COOL's case expressions
 func (cg *CodeGenerator) generateCaseExpression(caseExpr *ast.CaseExpression) value.Value {
+	// Increment the case counter for unique block names
+	cg.CaseCounter++
+	counterSuffix := fmt.Sprintf(".%d", cg.CaseCounter)
+
 	// Get the current function
 	currentFunc := cg.CurrentFunc
 
@@ -1913,17 +1902,16 @@ func (cg *CodeGenerator) generateCaseExpression(caseExpr *ast.CaseExpression) va
 
 	// Create a basic block for the end of the case expression
 	// All branches will merge to this block
-	endBlock := currentFunc.NewBlock("case.end")
+	endBlock := currentFunc.NewBlock("case.end" + counterSuffix)
 
 	// Create a basic block for each branch
 	branchBlocks := make([]*ir.Block, len(caseExpr.Branches))
 	for i := range caseExpr.Branches {
-		branchBlocks[i] = currentFunc.NewBlock(fmt.Sprintf("case.branch.%d", i))
+		branchBlocks[i] = currentFunc.NewBlock(fmt.Sprintf("case.branch.%d%s", i, counterSuffix))
 	}
 
-	// Create a default block for when no branch matches
 	// This should never happen in well-typed COOL code, but we need it for LLVM
-	noMatchBlock := currentFunc.NewBlock("case.nomatch")
+	noMatchBlock := currentFunc.NewBlock("case.nomatch" + counterSuffix)
 
 	// Get the current block - we'll be branching from here
 	currentBlock := currentFunc.Blocks[len(currentFunc.Blocks)-(len(caseExpr.Branches)+2)]
@@ -1940,7 +1928,7 @@ func (cg *CodeGenerator) generateCaseExpression(caseExpr *ast.CaseExpression) va
 	// We'll add a null check if the expression is a reference type
 	if ptrType, isPtr := exprValue.Type().(*types.PointerType); isPtr {
 		// Create a block for the null check
-		notNullBlock := currentFunc.NewBlock("case.notnull")
+		notNullBlock := currentFunc.NewBlock("case.notnull" + counterSuffix)
 
 		// Compare the object with null
 		nullVal := constant.NewNull(ptrType)
@@ -2086,7 +2074,7 @@ func (cg *CodeGenerator) generateCaseExpression(caseExpr *ast.CaseExpression) va
 // generateCallExpression creates LLVM IR for function calls
 func (cg *CodeGenerator) generateCallExpression(callExpr *ast.CallExpression) value.Value {
 	// Get the current block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
 	// Generate code for each argument
 	args := make([]value.Value, 0, len(callExpr.Arguments))
@@ -2128,7 +2116,7 @@ func (cg *CodeGenerator) generateCallExpression(callExpr *ast.CallExpression) va
 // generateRegularCall creates LLVM IR for direct function calls to known functions
 func (cg *CodeGenerator) generateRegularCall(funcName string, args []value.Value) value.Value {
 	// Get the current block
-	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+	block := cg.CurrentBlock
 
 	// Look up the function in the current scope/module
 	funcValue, exists := cg.Symbols[funcName]

@@ -17,6 +17,10 @@ class Sum {
             num1 + num2
     };
 
+    setNum1(n : Int) : Int {
+        num1 <- n
+    };
+
     printName() : IO {
         {
             (new IO).out_string(name).out_string("\n");
@@ -43,7 +47,13 @@ class Main {
          result <- s.sum();
          io.out_string("The sum is: ");
          io.out_int(result);
-         io.out_string("\n");
+         io.out_string("\n-----------------------\n");
+         s.setNum1(100);
+         result <- s.sum();
+         io.out_string("The sum is: ");
+         io.out_int(result);
+         io.out_string("\n-----------------------\n");
+
          
          s.printName();
          s.setName("another name");

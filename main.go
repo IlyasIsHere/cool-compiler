@@ -20,7 +20,9 @@ func main() {
 
 	input, err := os.ReadFile(os.Args[1])
 	// input, err := os.ReadFile("cool_examples/sum.cl")
+	// input, err := os.ReadFile("cool_examples/sum2.cl")
 	// input, err := os.ReadFile("cool_examples/test_input.cl")
+	// input, err := os.ReadFile("cool_examples/if_example.cl")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 		os.Exit(1)
