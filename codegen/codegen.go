@@ -37,29 +37,41 @@ type CodeGenerator struct {
 
 	// Built-in classes
 	BuiltInClasses []*ast.Class
+
+	// Program classes from the source code
+	ProgramClasses []*ast.Class
+
+	// AttributeIndices maps class names to a map of attribute names to their indices in the class struct
+	AttributeIndices map[string]map[string]int
+
+	// MethodIndices maps class names to a map of method names to their indices in the vtable
+	MethodIndices map[string]map[string]int
 }
 
 // Generate is the main entry point for code generation
 func Generate(program *ast.Program) (*ir.Module, error) {
-	// Initialize code generator
+	// Create the code generator
 	cg := NewCodeGenerator()
 
-	// Define built-in COOL classes first
+	// Define built-in classes
 	cg.DefineBuiltInClasses()
 
-	// Initialize standard library functions that depend on class definitions
+	// Initialize standard library functions
 	cg.initStdlib()
 
-	// Generate class structures
+	// Store program classes for later reference
+	cg.ProgramClasses = program.Classes
+
+	// First, generate class structures
 	cg.GenerateClassStructs(program)
 
-	// Generate virtual method tables FIRST (creates method declarations)
+	// Next, generate vtables
 	cg.GenerateVTables(program)
 
-	// Generate method implementations AFTER (fills method bodies)
+	// Generate method implementations
 	cg.GenerateMethods(program)
 
-	// Generate the main function
+	// Generate main function
 	cg.GenerateMain(program)
 
 	return cg.Module, nil
@@ -68,13 +80,16 @@ func Generate(program *ast.Program) (*ir.Module, error) {
 // NewCodeGenerator creates a new code generator
 func NewCodeGenerator() *CodeGenerator {
 	cg := &CodeGenerator{
-		Module:         ir.NewModule(),
-		TypeMap:        make(map[string]*types.StructType),
-		VTables:        make(map[string]*ir.Global),
-		ClassHierarchy: make(map[string]string),
-		Symbols:        make(map[string]value.Value),
-		StdlibFuncs:    make(map[string]*ir.Func),
-		BuiltInClasses: []*ast.Class{},
+		Module:           ir.NewModule(),
+		TypeMap:          make(map[string]*types.StructType),
+		VTables:          make(map[string]*ir.Global),
+		ClassHierarchy:   make(map[string]string),
+		Symbols:          make(map[string]value.Value),
+		StdlibFuncs:      make(map[string]*ir.Func),
+		BuiltInClasses:   []*ast.Class{},
+		ProgramClasses:   []*ast.Class{},
+		AttributeIndices: make(map[string]map[string]int),
+		MethodIndices:    make(map[string]map[string]int),
 	}
 
 	return cg
@@ -98,6 +113,13 @@ func (cg *CodeGenerator) initStdlib() {
 		ir.NewParam("ptr", types.NewPointer(types.I8)),
 	)
 
+	// exit for terminating the program
+	cg.StdlibFuncs["exit"] = cg.Module.NewFunc(
+		"exit",
+		types.Void,
+		ir.NewParam("status", types.I32),
+	)
+
 	// IO functions
 
 	// Declare C standard library functions
@@ -109,76 +131,42 @@ func (cg *CodeGenerator) initStdlib() {
 	printfFunc.Sig.Variadic = true
 	cg.StdlibFuncs["printf"] = printfFunc
 
-	// in_string - read a string from stdin
-	cg.StdlibFuncs["in_string"] = cg.Module.NewFunc(
-		"in_string",
-		types.NewPointer(types.I8),
-	)
-
-	// in_int - read an integer from stdin
-	cg.StdlibFuncs["in_int"] = cg.Module.NewFunc(
-		"in_int",
+	// scanf function for input
+	scanfFunc := cg.Module.NewFunc(
+		"scanf",
 		types.I32,
+		ir.NewParam("format", types.NewPointer(types.I8)),
 	)
+	scanfFunc.Sig.Variadic = true
+	cg.StdlibFuncs["scanf"] = scanfFunc
 
-	// String manipulation functions
-
-	// string_length - get the length of a string
-	cg.StdlibFuncs["string_length"] = cg.Module.NewFunc(
-		"string_length",
+	// Standard C string functions
+	cg.StdlibFuncs["strlen"] = cg.Module.NewFunc(
+		"strlen",
 		types.I32,
 		ir.NewParam("str", types.NewPointer(types.I8)),
 	)
 
-	// string_concat - concatenate two strings
-	cg.StdlibFuncs["string_concat"] = cg.Module.NewFunc(
-		"string_concat",
+	cg.StdlibFuncs["strcpy"] = cg.Module.NewFunc(
+		"strcpy",
 		types.NewPointer(types.I8),
-		ir.NewParam("str1", types.NewPointer(types.I8)),
-		ir.NewParam("str2", types.NewPointer(types.I8)),
+		ir.NewParam("dest", types.NewPointer(types.I8)),
+		ir.NewParam("src", types.NewPointer(types.I8)),
 	)
 
-	// string_substr - get a substring
-	cg.StdlibFuncs["string_substr"] = cg.Module.NewFunc(
-		"string_substr",
+	cg.StdlibFuncs["strcat"] = cg.Module.NewFunc(
+		"strcat",
 		types.NewPointer(types.I8),
-		ir.NewParam("str", types.NewPointer(types.I8)),
-		ir.NewParam("start", types.I32),
-		ir.NewParam("length", types.I32),
+		ir.NewParam("dest", types.NewPointer(types.I8)),
+		ir.NewParam("src", types.NewPointer(types.I8)),
 	)
 
-	// Runtime support functions
-
-	// abort - terminate the program with an error message
-	cg.StdlibFuncs["abort"] = cg.Module.NewFunc(
-		"abort",
-		types.Void,
-	)
-
-	// type_name - get the name of an object's type as a string
-	cg.StdlibFuncs["type_name"] = cg.Module.NewFunc(
-		"type_name",
+	cg.StdlibFuncs["strncpy"] = cg.Module.NewFunc(
+		"strncpy",
 		types.NewPointer(types.I8),
-		ir.NewParam("obj", types.NewPointer(types.I8)),
-	)
-
-	// copy - create a shallow copy of an object
-	cg.StdlibFuncs["object_copy"] = cg.Module.NewFunc(
-		"object_copy",
-		types.NewPointer(types.I8),
-		ir.NewParam("obj", types.NewPointer(types.I8)),
-	)
-
-	// Runtime type checking for case expressions
-	cg.StdlibFuncs["case_abort"] = cg.Module.NewFunc(
-		"case_abort",
-		types.Void,
-	)
-
-	// Dispatch on void check
-	cg.StdlibFuncs["dispatch_abort"] = cg.Module.NewFunc(
-		"dispatch_abort",
-		types.Void,
+		ir.NewParam("dest", types.NewPointer(types.I8)),
+		ir.NewParam("src", types.NewPointer(types.I8)),
+		ir.NewParam("n", types.I32),
 	)
 }
 
@@ -223,9 +211,15 @@ func (cg *CodeGenerator) defineClassStruct(class *ast.Class) {
 	className := class.Name.Value
 	classType := cg.TypeMap[className]
 
+	// Create a map for this class's attributes if it doesn't exist
+	if _, exists := cg.AttributeIndices[className]; !exists {
+		cg.AttributeIndices[className] = make(map[string]int)
+	}
+
 	// Collect all fields for this class (including inherited fields)
 	var fields []types.Type
 	var parentFields []types.Type
+	fieldIndex := 1 // Start at 1 because index 0 is vtable pointer
 
 	// First field is always a pointer to the vtable
 	fields = append(fields, types.NewPointer(types.I8)) // vtable pointer
@@ -245,6 +239,13 @@ func (cg *CodeGenerator) defineClassStruct(class *ast.Class) {
 
 		// Add parent fields to this class's fields
 		fields = append(fields, parentFields...)
+
+		// Copy the parent attribute indices to this class
+		for attrName, attrIndex := range cg.AttributeIndices[parent] {
+			cg.AttributeIndices[className][attrName] = attrIndex
+		}
+
+		fieldIndex += len(parentFields)
 	}
 
 	// Add class's own fields
@@ -273,7 +274,10 @@ func (cg *CodeGenerator) defineClassStruct(class *ast.Class) {
 				attrType = types.NewPointer(referencedType)
 			}
 
+			// Add attribute to fields and track its index
 			fields = append(fields, attrType)
+			cg.AttributeIndices[className][attr.Name.Value] = fieldIndex
+			fieldIndex++
 		}
 	}
 
@@ -298,6 +302,11 @@ func (cg *CodeGenerator) createVTableForClass(class *ast.Class, program *ast.Pro
 		return
 	}
 
+	// Create method indices map for this class if it doesn't exist
+	if _, exists := cg.MethodIndices[className]; !exists {
+		cg.MethodIndices[className] = make(map[string]int)
+	}
+
 	// Collect methods from parent classes first (to maintain correct override order)
 	var parentMethods map[string]*ir.Func
 	if parent, exists := cg.ClassHierarchy[className]; exists && parent != "" {
@@ -310,6 +319,11 @@ func (cg *CodeGenerator) createVTableForClass(class *ast.Class, program *ast.Pro
 		// Copy methods from parent vtable
 		parentMethods = make(map[string]*ir.Func)
 		// In a full implementation, you would copy methods from parent vtable here
+
+		// Copy the parent method indices to this class
+		for methodName, methodIndex := range cg.MethodIndices[parent] {
+			cg.MethodIndices[className][methodName] = methodIndex
+		}
 	}
 
 	// Create a map of method names to functions for this class
@@ -338,15 +352,43 @@ func (cg *CodeGenerator) createVTableForClass(class *ast.Class, program *ast.Pro
 				}
 
 				// If we didn't find the built-in method, create it on demand
-				if !found && className == "IO" && method.Name.Value == "out_string" {
-					// Create IO.out_string function
-					outStringFunc := cg.Module.NewFunc(
-						"IO.out_string",
-						types.NewPointer(cg.TypeMap["IO"]),
-						ir.NewParam("self", types.NewPointer(cg.TypeMap["IO"])),
-						ir.NewParam("str", types.NewPointer(types.I8)),
-					)
-					methods[method.Name.Value] = outStringFunc
+				if !found && className == "IO" {
+					switch method.Name.Value {
+					case "out_string":
+						// Create IO.out_string function
+						outStringFunc := cg.Module.NewFunc(
+							"IO.out_string",
+							types.NewPointer(cg.TypeMap["IO"]),
+							ir.NewParam("self", types.NewPointer(cg.TypeMap["IO"])),
+							ir.NewParam("str", types.NewPointer(types.I8)),
+						)
+						methods[method.Name.Value] = outStringFunc
+					case "out_int":
+						// Create IO.out_int function
+						outIntFunc := cg.Module.NewFunc(
+							"IO.out_int",
+							types.NewPointer(cg.TypeMap["IO"]),
+							ir.NewParam("self", types.NewPointer(cg.TypeMap["IO"])),
+							ir.NewParam("i", types.I32),
+						)
+						methods[method.Name.Value] = outIntFunc
+					case "in_string":
+						// Create IO.in_string function
+						inStringFunc := cg.Module.NewFunc(
+							"IO.in_string",
+							types.NewPointer(types.I8),
+							ir.NewParam("self", types.NewPointer(cg.TypeMap["IO"])),
+						)
+						methods[method.Name.Value] = inStringFunc
+					case "in_int":
+						// Create IO.in_int function
+						inIntFunc := cg.Module.NewFunc(
+							"IO.in_int",
+							types.I32,
+							ir.NewParam("self", types.NewPointer(cg.TypeMap["IO"])),
+						)
+						methods[method.Name.Value] = inIntFunc
+					}
 				}
 
 				continue // Skip creating a new declaration
@@ -447,6 +489,9 @@ func (cg *CodeGenerator) createVTableForClass(class *ast.Class, program *ast.Pro
 		funcPtr := methods[name]
 		// Cast the function pointer to i8*
 		initializers[i] = constant.NewBitCast(funcPtr, types.NewPointer(types.I8))
+
+		// Store the method index in the MethodIndices map
+		cg.MethodIndices[className][name] = i
 	}
 
 	// Create the vtable with the function pointers directly initialized
@@ -762,7 +807,165 @@ func (cg *CodeGenerator) generateObjectAllocation(typeName string) value.Value {
 		vtableFieldPtr,
 	)
 
+	// Initialize attributes with default values
+	cg.initializeAttributes(typeName, objectPtr)
+
 	return objectPtr
+}
+
+// initializeAttributes initializes all attributes of a class with their default values
+func (cg *CodeGenerator) initializeAttributes(className string, objectPtr value.Value) {
+	// Get the current block
+	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
+
+	// Find the class in the built-in classes or the program
+	var class *ast.Class
+	for _, builtInClass := range cg.BuiltInClasses {
+		if builtInClass.Name.Value == className {
+			class = builtInClass
+			break
+		}
+	}
+
+	if class == nil {
+		// Look in the program classes (need to add a field to store them)
+		// For now, we'll have to search in the program each time
+		// This could be optimized by storing a map of class names to classes
+		for _, c := range cg.Module.TypeDefs {
+			if c.Name() == className {
+				// Found the class type, now we need to find the class AST node
+				// This is a bit inefficient - in a real implementation, we'd store
+				// a map from class names to class AST nodes
+				// For now, just find the AST node if not a built-in class
+				for _, programClass := range cg.ProgramClasses {
+					if programClass.Name.Value == className {
+						class = programClass
+						break
+					}
+				}
+				break
+			}
+		}
+	}
+
+	if class == nil {
+		// If class is still nil, we couldn't find it - this shouldn't happen
+		// after semantic analysis
+		return
+	}
+
+	// Get the struct type for the class
+	classType := cg.TypeMap[className]
+
+	// Save the old 'self' value
+	oldSelf, hasSelf := cg.Symbols["self"]
+
+	// Set 'self' to the new object to allow attribute init expressions to access it
+	cg.Symbols["self"] = objectPtr
+
+	// Process attributes including inherited ones
+	ancestors := []string{className}
+	current := className
+	for {
+		parent, exists := cg.ClassHierarchy[current]
+		if !exists || parent == "" {
+			break
+		}
+		ancestors = append([]string{parent}, ancestors...) // Add parent to the beginning
+		current = parent
+	}
+
+	// Initialize attributes from parent to child
+	for _, ancestorName := range ancestors {
+		ancestor := findClass(ancestorName, &ast.Program{Classes: cg.ProgramClasses})
+		if ancestor == nil {
+			// Check built-in classes
+			for _, builtInClass := range cg.BuiltInClasses {
+				if builtInClass.Name.Value == ancestorName {
+					ancestor = builtInClass
+					break
+				}
+			}
+			if ancestor == nil {
+				continue // Skip if we can't find the ancestor
+			}
+		}
+
+		// Initialize this class's attributes
+		for _, feature := range ancestor.Features {
+			if attr, isAttr := feature.(*ast.Attribute); isAttr {
+				if attr.Expression != nil {
+					// Get the attribute index
+					attrIndex, exists := cg.AttributeIndices[className][attr.Name.Value]
+					if !exists {
+						continue // Skip if the attribute index isn't found
+					}
+
+					// Generate the init expression
+					initValue := cg.generateExpression(attr.Expression)
+
+					// Get the attribute type
+					attrType := classType.Fields[attrIndex]
+
+					// Make sure types match
+					if !initValue.Type().Equal(attrType) {
+						// Need to cast if types don't match
+						initValue = block.NewBitCast(initValue, attrType)
+					}
+
+					// Get a pointer to the attribute field and store the initial value
+					attrPtr := block.NewGetElementPtr(
+						classType,
+						objectPtr,
+						constant.NewInt(types.I32, 0),
+						constant.NewInt(types.I32, int64(attrIndex)),
+					)
+					block.NewStore(initValue, attrPtr)
+				}
+			}
+		}
+	}
+
+	// Restore the old 'self' value
+	if hasSelf {
+		cg.Symbols["self"] = oldSelf
+	} else {
+		delete(cg.Symbols, "self")
+	}
+}
+
+// getObjectRuntimeType gets the runtime type name of an object
+// In a real compiler, this would use runtime type information
+// For our simple implementation, we'll extract it from the object's type
+func (cg *CodeGenerator) getObjectRuntimeType(object value.Value, block *ir.Block) string {
+	// Handle primitive types first
+	switch object.Type() {
+	case types.I1: // Boolean type
+		return "Bool"
+	case types.I32: // Integer type
+		return "Int"
+	case types.I8Ptr: // String type (i8*)
+		return "String"
+	}
+
+	// Existing struct type handling
+	objPtrType, ok := object.Type().(*types.PointerType)
+	if !ok {
+		panic(fmt.Sprintf("expected object to be a pointer type, got: %v", object.Type()))
+	}
+
+	objStructType, ok := objPtrType.ElemType.(*types.StructType)
+	if !ok {
+		panic(fmt.Sprintf("expected object to point to a struct type, got: %v", objPtrType.ElemType))
+	}
+
+	for name, typ := range cg.TypeMap {
+		if typ == objStructType {
+			return name
+		}
+	}
+
+	return "Object"
 }
 
 // generateDynamicDispatch generates code for method dispatch
@@ -782,7 +985,22 @@ func (cg *CodeGenerator) generateDynamicDispatch(object value.Value, methodName 
 	// Get the underlying struct type
 	objStructType, ok := objPtrType.ElemType.(*types.StructType)
 	if !ok {
-		panic(fmt.Sprintf("expected object to point to a struct type, got: %v", objPtrType.ElemType))
+		// Handle i8* pointer type - we need to bitcast it to the appropriate type first
+		// Get the object's runtime type name
+		objectTypeName := cg.getObjectRuntimeType(object, block)
+
+		// Look up the struct type for this class
+		structType, exists := cg.TypeMap[objectTypeName]
+		if !exists {
+			panic(fmt.Sprintf("cannot find struct type for class: %s", objectTypeName))
+		}
+
+		// Bitcast the i8* pointer to the appropriate struct pointer type
+		structPtrType := types.NewPointer(structType)
+		object = block.NewBitCast(object, structPtrType)
+
+		// Update the struct type for further operations
+		objStructType = structType
 	}
 
 	// Get pointer to the vtable field in the object (first field)
@@ -794,12 +1012,24 @@ func (cg *CodeGenerator) generateDynamicDispatch(object value.Value, methodName 
 	)
 
 	// Load the vtable pointer
-	vtablePtr := block.NewLoad(types.NewPointer(types.I8), vtablePtrPtr) // Adjust type as needed
+	vtablePtr := block.NewLoad(types.NewPointer(types.I8), vtablePtrPtr)
 
 	// Find the method's index in the vtable
-	// This would require a mapping from method names to vtable indices
-	// For simplicity, we'll assume there's a helper function that finds the method's index
-	methodIndex := 0 // Placeholder - would need actual implementation
+	// Get the object's runtime type
+	objectTypeName := cg.getObjectRuntimeType(object, block)
+	methodIndex := -1
+
+	// Look up the method index in the MethodIndices map
+	if indices, exists := cg.MethodIndices[objectTypeName]; exists {
+		if idx, exists := indices[methodName]; exists {
+			methodIndex = idx
+		}
+
+	}
+
+	if methodIndex == -1 {
+		panic(fmt.Sprintf("method %s not found in class %s", methodName, objectTypeName))
+	}
 
 	// Load the function pointer from the vtable
 	// In LLVM IR, this involves a getelementptr to get to the right slot, then a load
@@ -808,17 +1038,21 @@ func (cg *CodeGenerator) generateDynamicDispatch(object value.Value, methodName 
 		constant.NewInt(types.I32, int64(methodIndex)), // Second index is the method index
 	}
 
-	// Get pointer to the method slot in the vtable
 	// We need to cast vtablePtr to the appropriate type first
-	vtableType := types.NewPointer(types.NewArray(0, types.NewPointer(types.I8))) // Example vtable type
+	vtableType := types.NewPointer(types.NewArray(0, types.NewPointer(types.I8)))
 	castedVTablePtr := block.NewBitCast(vtablePtr, vtableType)
 
-	// Get pointer to the method slot
-	methodSlotPtr := block.NewGetElementPtr(vtableType.ElemType, castedVTablePtr, gepIndices...)
+	// Get pointer to the method slot in the vtable
+	methodSlotPtr := block.NewGetElementPtr(
+		types.NewArray(0, types.NewPointer(types.I8)),
+		castedVTablePtr,
+		gepIndices...,
+	)
 
 	// Load the method function pointer
 	methodPtr := block.NewLoad(types.NewPointer(types.I8), methodSlotPtr)
 
+	// For a real implementation, we should look up the method's signature
 	// Determine appropriate return type for the method
 	var returnType types.Type
 	// For special IO methods like out_string that return SELF_TYPE
@@ -826,9 +1060,34 @@ func (cg *CodeGenerator) generateDynamicDispatch(object value.Value, methodName 
 		// These methods return the object itself (SELF_TYPE)
 		returnType = object.Type()
 	} else {
-		// For other methods, we'd determine this through the method signature
-		// For simplicity, we'll use a pointer type (representing COOL's Object)
-		returnType = types.NewPointer(types.I8)
+		// Look up method's actual return type by finding the method declaration
+		// First, determine object's class type from its LLVM type
+		className := objectTypeName
+
+		if className != "" {
+			// Look for the function declaration in the module
+			funcName := fmt.Sprintf("%s.%s", className, methodName)
+			var methodFunc *ir.Func
+
+			// Search for method in the module
+			for _, f := range cg.Module.Funcs {
+				if f.Name() == funcName {
+					methodFunc = f
+					break
+				}
+			}
+
+			if methodFunc != nil {
+				// Use the actual return type from the method's signature
+				returnType = methodFunc.Sig.RetType
+			} else {
+				// If method not found, use the generic Object pointer type as fallback
+				returnType = types.NewPointer(types.I8)
+			}
+		} else {
+			// If we can't determine the class name, use generic Object pointer
+			returnType = types.NewPointer(types.I8)
+		}
 	}
 
 	// Create a function type with the appropriate parameters and return type
@@ -923,21 +1182,63 @@ func (cg *CodeGenerator) generateObjectIdentifier(identifier *ast.ObjectIdentifi
 
 	// Try to find the identifier in the symbol table
 	val, exists := cg.Symbols[identifier.Value]
+	if exists {
+		// Check if the identifier refers to a local variable or parameter (already stored in register)
+		if _, isLocalVar := val.(*ir.InstAlloca); isLocalVar {
+			// For local variables (alloca instructions), we need to load the value
+			block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1] // Get current block
+			load := block.NewLoad(val.Type().(*types.PointerType).ElemType, val)
+			return load
+		}
+
+		// For non-local variables (global, parameters, etc.)
+		return val
+	}
+
+	// If not found in the symbol table, it might be a class attribute
+	selfPtr, exists := cg.Symbols["self"]
+	if !exists {
+		panic("'self' not found in symbol table")
+	}
+
+	// Get the class name from self's type
+	selfPtrType := selfPtr.Type().(*types.PointerType)
+	structType := selfPtrType.ElemType.(*types.StructType)
+	className := ""
+
+	// Extract class name from struct type name
+	for name, typ := range cg.TypeMap {
+		if typ == structType {
+			className = name
+			break
+		}
+	}
+
+	if className == "" {
+		panic("couldn't determine class name for self")
+	}
+
+	// Find the attribute index
+	attrIndex, exists := cg.AttributeIndices[className][identifier.Value]
 	if !exists {
 		// This should not happen if semantic analysis was successful
-		panic(fmt.Sprintf("undefined identifier encountered during code generation: %s", identifier.Value))
+		panic(fmt.Sprintf("undefined attribute in class %s: %s", className, identifier.Value))
 	}
 
-	// Check if the identifier refers to a local variable or parameter (already stored in register)
-	if _, isLocalVar := val.(*ir.InstAlloca); isLocalVar {
-		// For local variables (alloca instructions), we need to load the value
-		block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1] // Get current block
-		load := block.NewLoad(val.Type().(*types.PointerType).ElemType, val)
-		return load
-	}
+	// Get the current block
+	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
 
-	// For non-local variables (global, parameters, etc.)
-	return val
+	// Get the attribute type
+	attributeType := structType.Fields[attrIndex]
+
+	// Get a pointer to the attribute
+	attrPtr := block.NewGetElementPtr(structType, selfPtr,
+		constant.NewInt(types.I32, 0),
+		constant.NewInt(types.I32, int64(attrIndex)))
+
+	// Load the attribute value
+	load := block.NewLoad(attributeType, attrPtr)
+	return load
 }
 
 // generateAssignmentExpression creates LLVM IR for variable assignment
@@ -945,26 +1246,70 @@ func (cg *CodeGenerator) generateAssignmentExpression(assign *ast.AssignmentExpr
 	// First, generate code for the right-hand side expression
 	rhsValue := cg.generateExpression(assign.Expression)
 
-	// Get the target variable from the symbol table
-	target, exists := cg.Symbols[assign.Identifier.Value]
-	if !exists {
-		panic(fmt.Sprintf("undefined identifier in assignment: %s", assign.Identifier.Value))
-	}
-
 	// Get the current basic block
 	block := cg.CurrentFunc.Blocks[len(cg.CurrentFunc.Blocks)-1]
 
-	// Handle different target types:
-	if allocaInst, isLocalVar := target.(*ir.InstAlloca); isLocalVar {
+	// Check if it's a local variable (in the symbol table)
+	if target, exists := cg.Symbols[assign.Identifier.Value]; exists {
 		// For local variables (created with alloca), we use a store instruction
-		block.NewStore(rhsValue, allocaInst)
-	} else if _, isParam := target.(*ir.Param); isParam {
-		// For parameters, we need to create a store if they've been copied to local storage
-		// (In SSA form, parameters are immutable, so we typically need to have created an alloca for them)
-		panic("assignment to parameter not properly handled - parameters should have local storage")
+		if allocaInst, isLocalVar := target.(*ir.InstAlloca); isLocalVar {
+			// Check if types are compatible, cast if needed
+			targetType := allocaInst.Type().(*types.PointerType).ElemType
+			if !targetType.Equal(rhsValue.Type()) {
+				// We need to cast the value to match the destination type
+				rhsValue = block.NewBitCast(rhsValue, targetType)
+			}
+			block.NewStore(rhsValue, allocaInst)
+		} else if _, isParam := target.(*ir.Param); isParam {
+			// Parameters should have local storage
+			panic("assignment to parameter not properly handled - parameters should have local storage")
+		} else {
+			// Other cases (e.g., global variables) would be handled here
+			panic(fmt.Sprintf("unsupported assignment target type: %T", target))
+		}
 	} else {
-		// Other cases (e.g., global variables) would be handled here
-		panic(fmt.Sprintf("unsupported assignment target type: %T", target))
+		// If not in symbol table, it must be a class attribute - access through 'self'
+		selfPtr, exists := cg.Symbols["self"]
+		if !exists {
+			panic("'self' not found in symbol table")
+		}
+
+		// Get the class name from self's type
+		selfPtrType := selfPtr.Type().(*types.PointerType)
+		structType := selfPtrType.ElemType.(*types.StructType)
+		className := "" // Need to extract class name from type
+
+		// Extract class name from struct type name
+		for name, typ := range cg.TypeMap {
+			if typ == structType {
+				className = name
+				break
+			}
+		}
+
+		if className == "" {
+			panic("couldn't determine class name for self")
+		}
+
+		// Find the attribute index
+		attrIndex, exists := cg.AttributeIndices[className][assign.Identifier.Value]
+		if !exists {
+			panic(fmt.Sprintf("undefined attribute in class %s: %s", className, assign.Identifier.Value))
+		}
+
+		// Get a pointer to the attribute and store the value
+		attrPtr := block.NewGetElementPtr(structType, selfPtr,
+			constant.NewInt(types.I32, 0),
+			constant.NewInt(types.I32, int64(attrIndex)))
+
+		// Check if types are compatible, cast if needed
+		attributeType := structType.Fields[attrIndex]
+		if !attributeType.Equal(rhsValue.Type()) {
+			// We need to cast the value to match the destination type
+			rhsValue = block.NewBitCast(rhsValue, attributeType)
+		}
+
+		block.NewStore(rhsValue, attrPtr)
 	}
 
 	// In COOL, an assignment returns the assigned value
@@ -1020,13 +1365,14 @@ func (cg *CodeGenerator) generateIfExpression(ifExpr *ast.IfExpression) value.Va
 		resultType = types.NewPointer(types.I8)
 	}
 
-	// Create a PHI node to merge the values
-	phi := mergeBlock.NewPhi()
-	phi.Typ = resultType
+	// Create a PHI node with incoming values right away
+	phi := mergeBlock.NewPhi(
+		&ir.Incoming{X: trueValue, Pred: trueBlock},
+		&ir.Incoming{X: falseValue, Pred: falseBlock},
+	)
 
-	// Add the incoming values to the PHI node
-	phi.Incs = append(phi.Incs, &ir.Incoming{X: trueValue, Pred: trueBlock})
-	phi.Incs = append(phi.Incs, &ir.Incoming{X: falseValue, Pred: falseBlock})
+	// Set the correct type for the PHI node
+	phi.Typ = resultType
 
 	return phi
 }
@@ -2062,8 +2408,20 @@ func (cg *CodeGenerator) generateObjectAbortMethod(class *ast.Class, method *ast
 	)
 
 	entry := funcDecl.NewBlock("entry")
-	entry.NewCall(cg.StdlibFuncs["abort"])
-	entry.NewUnreachable() // abort doesn't return
+
+	// Print error message
+	errorMsg := constant.NewCharArrayFromString("Program aborted\n\x00")
+	global := cg.Module.NewGlobalDef(".str.abort_msg", errorMsg)
+	global.Immutable = true
+	msgPtr := constant.NewGetElementPtr(errorMsg.Type(), global,
+		constant.NewInt(types.I32, 0),
+		constant.NewInt(types.I32, 0),
+	)
+	entry.NewCall(cg.StdlibFuncs["printf"], msgPtr)
+
+	// Exit with status code 1
+	entry.NewCall(cg.StdlibFuncs["exit"], constant.NewInt(types.I32, 1))
+	entry.NewUnreachable() // exit doesn't return
 }
 
 func (cg *CodeGenerator) generateTypeNameMethod(class *ast.Class, method *ast.Method) {
@@ -2112,20 +2470,44 @@ func (cg *CodeGenerator) generateIOInIntMethod(class *ast.Class, method *ast.Met
 	funcName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
 	ioType := cg.TypeMap["IO"]
 
-	// Create function with signature: Int (IO* self)
-	funcDecl := cg.Module.NewFunc(
-		funcName,
-		types.I32, // Returns Int
-		ir.NewParam("self", types.NewPointer(ioType)),
-	)
+	// Get the function if it already exists
+	var funcDecl *ir.Func
+	for _, f := range cg.Module.Funcs {
+		if f.Name() == funcName {
+			funcDecl = f
+			break
+		}
+	}
+
+	if funcDecl == nil {
+		// Create function with signature: Int (IO* self)
+		funcDecl = cg.Module.NewFunc(
+			funcName,
+			types.I32, // Returns Int
+			ir.NewParam("self", types.NewPointer(ioType)),
+		)
+	}
 
 	entry := funcDecl.NewBlock("entry")
 
-	// Call stdlib in_int function
-	inIntFunc := cg.StdlibFuncs["in_int"]
-	result := entry.NewCall(inIntFunc)
+	// Use scanf instead of custom in_int function
+	// Allocate space for the integer result
+	resultPtr := entry.NewAlloca(types.I32)
 
-	// Return the integer result directly
+	// Create a global constant for the format string
+	formatStrGlobal := cg.Module.NewGlobalDef(".str.scanf_d_fmt", constant.NewCharArrayFromString("%d\x00"))
+	formatStrGlobal.Immutable = true
+
+	// Get a pointer to the format string - using a simpler approach
+	formatStr := entry.NewBitCast(formatStrGlobal, types.NewPointer(types.I8))
+
+	// Call scanf to read the integer
+	entry.NewCall(cg.StdlibFuncs["scanf"], formatStr, resultPtr)
+
+	// Load the result
+	result := entry.NewLoad(types.I32, resultPtr)
+
+	// Return the integer
 	entry.NewRet(result)
 }
 
@@ -2134,21 +2516,56 @@ func (cg *CodeGenerator) generateIOInStringMethod(class *ast.Class, method *ast.
 	funcName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
 	ioType := cg.TypeMap["IO"]
 
-	// Create function with signature: String (IO* self)
-	funcDecl := cg.Module.NewFunc(
-		funcName,
-		types.NewPointer(types.I8), // Returns String (i8*)
-		ir.NewParam("self", types.NewPointer(ioType)),
-	)
+	// Get the function if it already exists
+	var funcDecl *ir.Func
+	for _, f := range cg.Module.Funcs {
+		if f.Name() == funcName {
+			funcDecl = f
+			break
+		}
+	}
+
+	if funcDecl == nil {
+		// Create function with signature: String (IO* self)
+		funcDecl = cg.Module.NewFunc(
+			funcName,
+			types.NewPointer(types.I8), // Returns String (i8*)
+			ir.NewParam("self", types.NewPointer(ioType)),
+		)
+	}
 
 	entry := funcDecl.NewBlock("entry")
 
-	// Call stdlib in_string function
-	inStringFunc := cg.StdlibFuncs["in_string"]
-	result := entry.NewCall(inStringFunc)
+	// Use scanf instead of custom in_string function
+	// Allocate space for the input string (using a fixed buffer size)
+	buffer := entry.NewAlloca(types.NewArray(1024, types.I8))
 
-	// Return the string pointer directly
-	entry.NewRet(result)
+	// Create a global constant for the format string
+	formatStrGlobal := cg.Module.NewGlobalDef(".str.scanf_s_fmt", constant.NewCharArrayFromString("%s\x00"))
+	formatStrGlobal.Immutable = true
+
+	// Get a pointer to the format string - using a simpler approach
+	formatStr := entry.NewBitCast(formatStrGlobal, types.NewPointer(types.I8))
+
+	// Call scanf to read into the buffer
+	entry.NewCall(cg.StdlibFuncs["scanf"], formatStr,
+		entry.NewBitCast(buffer, types.NewPointer(types.I8)))
+
+	// Allocate heap memory for the string and copy from the buffer
+	// First determine the length of the input
+	bufferPtr := entry.NewBitCast(buffer, types.NewPointer(types.I8))
+	strLen := entry.NewCall(cg.StdlibFuncs["strlen"], bufferPtr)
+
+	// Allocate memory for the string (length + 1 for null terminator)
+	allocSize := entry.NewAdd(strLen, constant.NewInt(types.I32, 1))
+	mallocResult := entry.NewCall(cg.StdlibFuncs["malloc"],
+		entry.NewZExt(allocSize, types.I64))
+
+	// Copy the string to the heap
+	entry.NewCall(cg.StdlibFuncs["strcpy"], mallocResult, bufferPtr)
+
+	// Return the string pointer
+	entry.NewRet(mallocResult)
 }
 
 // Add string method implementations
@@ -2156,11 +2573,22 @@ func (cg *CodeGenerator) generateStringLengthMethod(class *ast.Class, method *as
 	funcName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
 	stringType := cg.TypeMap["String"]
 
-	funcDecl := cg.Module.NewFunc(
-		funcName,
-		types.I32, // Returns Int
-		ir.NewParam("self", types.NewPointer(stringType)),
-	)
+	// Get the function if it already exists
+	var funcDecl *ir.Func
+	for _, f := range cg.Module.Funcs {
+		if f.Name() == funcName {
+			funcDecl = f
+			break
+		}
+	}
+
+	if funcDecl == nil {
+		funcDecl = cg.Module.NewFunc(
+			funcName,
+			types.I32, // Returns Int
+			ir.NewParam("self", types.NewPointer(stringType)),
+		)
+	}
 
 	entry := funcDecl.NewBlock("entry")
 	// Get the string pointer from the String object
@@ -2168,11 +2596,12 @@ func (cg *CodeGenerator) generateStringLengthMethod(class *ast.Class, method *as
 		stringType,
 		funcDecl.Params[0],
 		constant.NewInt(types.I32, 0),
-		constant.NewInt(types.I32, 1), // Directly access the string data field
+		constant.NewInt(types.I32, 1), // Access the string data field
 	)
 	loadedPtr := entry.NewLoad(types.NewPointer(types.I8), strPtr)
-	// Call string_length runtime function
-	length := entry.NewCall(cg.StdlibFuncs["string_length"], loadedPtr)
+
+	// Call strlen instead of string_length
+	length := entry.NewCall(cg.StdlibFuncs["strlen"], loadedPtr)
 	entry.NewRet(length)
 }
 
@@ -2221,12 +2650,25 @@ func (cg *CodeGenerator) generateStringConcatMethod(class *ast.Class, method *as
 	)
 	otherStringValue := block.NewLoad(types.NewPointer(types.I8), otherStringPtr)
 
-	//Bitcast to i8*
-	selfStringValueCasted := block.NewBitCast(selfStringValue, types.NewPointer(types.I8))
-	otherStringValueCasted := block.NewBitCast(otherStringValue, types.NewPointer(types.I8))
+	// 3. Use standard C library functions for concatenation
+	// Calculate the length of both strings
+	selfLen := block.NewCall(cg.StdlibFuncs["strlen"], selfStringValue)
+	otherLen := block.NewCall(cg.StdlibFuncs["strlen"], otherStringValue)
 
-	// 3. Call the runtime string_concat function
-	concatResult := block.NewCall(cg.StdlibFuncs["string_concat"], selfStringValueCasted, otherStringValueCasted)
+	// Calculate total length needed
+	totalLen := block.NewAdd(selfLen, otherLen)
+	// Add 1 for the null terminator
+	allocSize := block.NewAdd(totalLen, constant.NewInt(types.I32, 1))
+
+	// Allocate memory for the new string
+	mallocCall := block.NewCall(cg.StdlibFuncs["malloc"],
+		block.NewZExt(allocSize, types.I64))
+
+	// Copy the first string
+	block.NewCall(cg.StdlibFuncs["strcpy"], mallocCall, selfStringValue)
+
+	// Concatenate the second string
+	block.NewCall(cg.StdlibFuncs["strcat"], mallocCall, otherStringValue)
 
 	// 4. Store the result (i8*) into the new String object's string field
 	newStringDataPtr := block.NewGetElementPtr(
@@ -2235,7 +2677,7 @@ func (cg *CodeGenerator) generateStringConcatMethod(class *ast.Class, method *as
 		constant.NewInt(types.I32, 0),
 		constant.NewInt(types.I32, 1),
 	)
-	block.NewStore(concatResult, newStringDataPtr)
+	block.NewStore(mallocCall, newStringDataPtr)
 
 	// 5. Return the new String object
 	block.NewRet(newStringObj)
@@ -2278,14 +2720,59 @@ func (cg *CodeGenerator) generateStringSubstrMethod(class *ast.Class, method *as
 			constant.NewInt(types.I32, 1),
 		)
 		loadedStr := entry.NewLoad(types.NewPointer(types.I8), strPtr)
+		startIdx := funcDecl.Params[1]
+		length := funcDecl.Params[2]
 
-		// Call string_substr runtime function
-		substrPtr := entry.NewCall(
-			cg.StdlibFuncs["string_substr"],
-			loadedStr, funcDecl.Params[1], funcDecl.Params[2],
+		// Perform bounds checking
+		strLen := entry.NewCall(cg.StdlibFuncs["strlen"], loadedStr)
+
+		// Create a new block for the bounds check
+		boundsCheckBlock := funcDecl.NewBlock("bounds_check")
+		allocBlock := funcDecl.NewBlock("alloc")
+		errorBlock := funcDecl.NewBlock("error")
+
+		// Branch to the bounds check block
+		entry.NewBr(boundsCheckBlock)
+
+		// Check if start < 0 or start >= strLen or length < 0
+		startOutOfBounds := boundsCheckBlock.NewOr(
+			boundsCheckBlock.NewICmp(enum.IPredSLT, startIdx, constant.NewInt(types.I32, 0)),
+			boundsCheckBlock.NewICmp(enum.IPredSGE, startIdx, strLen),
 		)
+		lengthNegative := boundsCheckBlock.NewICmp(enum.IPredSLT, length, constant.NewInt(types.I32, 0))
+		invalidInput := boundsCheckBlock.NewOr(startOutOfBounds, lengthNegative)
 
-		// Create new String object explicitly with proper allocation
+		// Branch based on the bounds check
+		boundsCheckBlock.NewCondBr(invalidInput, errorBlock, allocBlock)
+
+		// Handle error case
+		errorMsgGlobal := cg.Module.NewGlobalDef(".str.substr_error",
+			constant.NewCharArrayFromString("Runtime error: substring out of range\n\x00"))
+		errorMsgGlobal.Immutable = true
+
+		errorMsgPtr := errorBlock.NewBitCast(errorMsgGlobal, types.NewPointer(types.I8))
+
+		errorBlock.NewCall(cg.StdlibFuncs["printf"], errorMsgPtr)
+		errorBlock.NewCall(cg.StdlibFuncs["exit"], constant.NewInt(types.I32, 1))
+		errorBlock.NewUnreachable()
+
+		// Allocate the new substring in the alloc block
+		// Calculate how much memory to allocate (length + 1 for null terminator)
+		allocSize := allocBlock.NewAdd(length, constant.NewInt(types.I32, 1))
+		mallocCall := allocBlock.NewCall(cg.StdlibFuncs["malloc"],
+			allocBlock.NewZExt(allocSize, types.I64))
+
+		// Get pointer to the start of the substring in the original string
+		substrStart := allocBlock.NewGetElementPtr(types.I8, loadedStr, startIdx)
+
+		// Use strncpy to copy exactly 'length' characters
+		allocBlock.NewCall(cg.StdlibFuncs["strncpy"], mallocCall, substrStart, length)
+
+		// Add null terminator at the end of the new substring
+		nullTermPtr := allocBlock.NewGetElementPtr(types.I8, mallocCall, length)
+		allocBlock.NewStore(constant.NewInt(types.I8, 0), nullTermPtr)
+
+		// Create new String object with proper allocation
 		// Calculate the size for malloc
 		sizeGEP := constant.NewGetElementPtr(
 			stringType,
@@ -2294,13 +2781,13 @@ func (cg *CodeGenerator) generateStringSubstrMethod(class *ast.Class, method *as
 		)
 
 		// Call malloc with the size of the String struct
-		mallocCall := entry.NewCall(cg.StdlibFuncs["malloc"], sizeGEP)
+		newStringMalloc := allocBlock.NewCall(cg.StdlibFuncs["malloc"], sizeGEP)
 
 		// Cast the malloc result to String pointer type
-		newString := entry.NewBitCast(mallocCall, types.NewPointer(stringType))
+		newString := allocBlock.NewBitCast(newStringMalloc, types.NewPointer(stringType))
 
 		// Set up the vtable pointer
-		vtableFieldPtr := entry.NewGetElementPtr(
+		vtableFieldPtr := allocBlock.NewGetElementPtr(
 			stringType,
 			newString,
 			constant.NewInt(types.I32, 0),
@@ -2311,20 +2798,20 @@ func (cg *CodeGenerator) generateStringSubstrMethod(class *ast.Class, method *as
 			panic("String vtable not found")
 		}
 
-		entry.NewStore(
-			entry.NewBitCast(vtable, types.NewPointer(types.I8)),
+		allocBlock.NewStore(
+			allocBlock.NewBitCast(vtable, types.NewPointer(types.I8)),
 			vtableFieldPtr,
 		)
 
 		// Store the substring in the new String object
-		newStrPtr := entry.NewGetElementPtr(
+		newStrPtr := allocBlock.NewGetElementPtr(
 			stringType,
 			newString,
 			constant.NewInt(types.I32, 0),
 			constant.NewInt(types.I32, 1),
 		)
-		entry.NewStore(substrPtr, newStrPtr)
+		allocBlock.NewStore(mallocCall, newStrPtr)
 
-		entry.NewRet(newString)
+		allocBlock.NewRet(newString)
 	}
 }

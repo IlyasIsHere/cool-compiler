@@ -95,12 +95,6 @@ func (sa *SemanticAnalyser) typeCheckClass(cls *ast.Class, st *SymbolTable) {
 }
 
 func (sa *SemanticAnalyser) typeCheckAttribute(attribute *ast.Attribute, st *SymbolTable) {
-	// Check if attribute is named 'self'
-	if attribute.Name.Value == "self" {
-		sa.errors = append(sa.errors, "cannot have attribute named 'self'")
-		return
-	}
-
 	// Check if attribute type exists
 	if _, ok := sa.globalSymbolTable.Lookup(attribute.TypeDecl.Value); !ok {
 		sa.errors = append(sa.errors, fmt.Sprintf("undefined type %s for attribute %s", attribute.TypeDecl.Value, attribute.Name.Value))
@@ -206,15 +200,40 @@ func (sa *SemanticAnalyser) getExpressionType(expression ast.Expression, st *Sym
 }
 
 func (sa *SemanticAnalyser) getObjectIdentifierType(identifier *ast.ObjectIdentifier, st *SymbolTable) string {
+	// Special handling for 'self'
+	if identifier.Value == "self" {
+		if sa.currentClass == "" {
+			sa.errors = append(sa.errors, "use of 'self' outside of class context")
+			return "Object"
+		}
+		return sa.currentClass // 'self' always has the type of the current class
+	}
+
+	// Look up the identifier in the symbol table
 	entry, ok := st.Lookup(identifier.Value)
 	if !ok {
 		sa.errors = append(sa.errors, fmt.Sprintf("undefined identifier %s", identifier.Value))
 		return "Object"
 	}
-	if entry.Type == "SELF_TYPE" {
+
+	// Handle different types of identifiers
+	switch entry.Type {
+	case "Attribute":
+		// For attributes, type is stored in AttrType
+		if entry.AttrType != nil {
+			return entry.AttrType.Value
+		}
+	case "SELF_TYPE":
+		// Special case for SELF_TYPE
 		return sa.currentClass
+	default:
+		// For regular variables (parameters, let bindings), Type field holds the type name
+		return entry.Type
 	}
-	return entry.Type
+
+	// If we get here, something went wrong - use Object as fallback
+	sa.errors = append(sa.errors, fmt.Sprintf("could not determine type for identifier %s", identifier.Value))
+	return "Object"
 }
 
 func (sa *SemanticAnalyser) getBlockExpressionType(bexpr *ast.BlockExpression, st *SymbolTable) string {
@@ -279,6 +298,12 @@ func (sa *SemanticAnalyser) buildClassesSymboltables(program *ast.Program) {
 
 func (sa *SemanticAnalyser) initializeObjectClass() {
 	objectScope := NewSymbolTable(nil)
+
+	// Add 'self' to Object class
+	objectScope.AddEntry("self", &SymbolEntry{
+		Type:  "SELF_TYPE",
+		Token: lexer.Token{Literal: "self"},
+	})
 
 	// Add Object methods
 	objectScope.AddEntry("abort", &SymbolEntry{
@@ -436,9 +461,20 @@ func (sa *SemanticAnalyser) initializeBoolClass() {
 func (sa *SemanticAnalyser) buildSymbolTables(program *ast.Program) {
 	for _, class := range program.Classes {
 		classEntry, _ := sa.globalSymbolTable.Lookup(class.Name.Value)
+
+		// Add 'self' to the class's symbol table with SELF_TYPE
+		classEntry.Scope.AddEntry("self", &SymbolEntry{
+			Type:  "SELF_TYPE",
+			Token: lexer.Token{Literal: "self"},
+		})
+
 		for _, feature := range class.Features {
 			switch f := feature.(type) {
 			case *ast.Attribute:
+				if f.Name.Value == "self" {
+					sa.errors = append(sa.errors, "cannot have attribute named 'self'")
+					continue
+				}
 				if sa.isAttributeRedefined(f.Name.Value, classEntry.Scope.parent) {
 					sa.errors = append(sa.errors, fmt.Sprintf("attribute %s is already defined in a parent class of %s", f.Name.Value, class.Name.Value))
 					continue
@@ -450,6 +486,12 @@ func (sa *SemanticAnalyser) buildSymbolTables(program *ast.Program) {
 				classEntry.Scope.AddEntry(f.Name.Value, &SymbolEntry{Type: "Attribute", Token: f.Name.Token, AttrType: f.TypeDecl})
 			case *ast.Method:
 				methodST := NewSymbolTable(classEntry.Scope)
+
+				// Add 'self' to method scope too, inheriting from class scope
+				methodST.AddEntry("self", &SymbolEntry{
+					Type:  "SELF_TYPE",
+					Token: lexer.Token{Literal: "self"},
+				})
 
 				redefined, parentEntry := sa.isMethodRedefined(f.Name.Value, classEntry.Scope.parent)
 				if redefined {
@@ -486,6 +528,12 @@ func (sa *SemanticAnalyser) GetNewExpressionType(ne *ast.NewExpression, st *Symb
 }
 
 func (sa *SemanticAnalyser) checkLetBinding(binding *ast.Binding, st *SymbolTable) string {
+	// Check if binding is trying to define 'self'
+	if binding.Identifier.Value == "self" {
+		sa.errors = append(sa.errors, "cannot define 'self' in let binding")
+		return "Object" // Return some valid type to continue analysis
+	}
+
 	declaredType := binding.Type.Value
 
 	// Handle SELF_TYPE
@@ -515,6 +563,11 @@ func (sa *SemanticAnalyser) checkLetBinding(binding *ast.Binding, st *SymbolTabl
 
 func (sa *SemanticAnalyser) GetLetExpressionType(letExpr *ast.LetExpression, st *SymbolTable) string {
 	letScope := NewSymbolTable(st) // Create a new scope, child of the current scope 'st'
+
+	// Explicitly inherit 'self' from parent scope
+	if selfEntry, ok := st.Lookup("self"); ok {
+		letScope.AddEntry("self", selfEntry)
+	}
 
 	for _, binding := range letExpr.Bindings {
 		declaredType := sa.checkLetBinding(binding, st)
@@ -631,6 +684,12 @@ func (sa *SemanticAnalyser) GetCaseExpressionType(ce *ast.CaseExpression, st *Sy
 	seenTypes := make(map[string]bool)
 
 	for _, branch := range ce.Branches {
+		// Check for 'self' as branch identifier
+		if branch.Identifier.Value == "self" {
+			sa.errors = append(sa.errors, "cannot use 'self' as case branch identifier")
+			continue
+		}
+
 		// Check for duplicate types in branches
 		if seenTypes[branch.Type.Value] {
 			sa.errors = append(sa.errors, fmt.Sprintf("duplicate branch type %s in case expression", branch.Type.Value))

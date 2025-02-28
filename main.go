@@ -19,7 +19,8 @@ func main() {
 	}
 
 	input, err := os.ReadFile(os.Args[1])
-	// input, err := os.ReadFile("test.cl")
+	// input, err := os.ReadFile("cool_examples/sum.cl")
+	// input, err := os.ReadFile("cool_examples/test_input.cl")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 		os.Exit(1)
@@ -64,9 +65,8 @@ func main() {
 
 	fmt.Printf("LLVM IR code generated successfully and written to %s\n", outputFilename)
 
-	// Try to compile with clang if available, including the runtime.c file
 	var cmd *exec.Cmd
-	cmd = exec.Command("clang", outputFilename, "runtime/runtime.c", "-o", "output.exe")
+	cmd = exec.Command("clang", "-Wno-deprecated", outputFilename, "-o", "output.exe", "-llegacy_stdio_definitions")
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
