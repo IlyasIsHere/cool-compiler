@@ -185,6 +185,88 @@ Whiskers purrs softly`,
 22 2
 33 3 35`,
 		},
+		{
+			"Is Prime",
+			"isprime.cl",
+			"Testing isPrime function\nIs 2 prime? Yes, it's prime\nIs 7 prime? Yes, it's prime\nIs 10 prime? No, it's not prime\nIs 17 prime? Yes, it's prime\n",
+		},
+		{
+			"GCD Recursive",
+			"gcd_recursive.cl",
+			`Greatest Common Divisor (GCD) Demo
+
+GCD of 48 and 18: 6
+GCD of 101 and 103: 1
+GCD of 1071 and 462: 21
+
+Step-by-step GCD calculation for 1071 and 462:
+  Step 1: gcd(1071, 462)
+    1071 mod 462 = 147
+    Step 2: gcd(462, 147)
+      462 mod 147 = 21
+      Step 3: gcd(147, 21)
+        147 mod 21 = 0
+        Step 4: gcd(21, 0)
+        Result = 21 (Base case reached)
+
+Comparing with iterative implementation:
+GCD of 1071 and 462 (iterative): 21`,
+		},
+		{
+			"Fibonacci",
+			"fibonacci.cl",
+			`Fibonacci Sequence Demo
+Recursive Fibonacci(10): 55
+Iterative Fibonacci(10): 55
+
+First 10 Fibonacci numbers (recursive):
+0, 1, 1, 2, 3, 5, 8, 13, 21, 34
+
+Recursive Fibonacci(20): 6765
+Iterative Fibonacci(20): 6765`,
+		},
+		{
+			"Mutual Recursion",
+			"mutual_recursion.cl",
+			`Mutual Recursion Demo (Even/Odd functions)
+
+Testing even numbers:
+0 is even
+2 is even
+4 is even
+6 is even
+10 is even
+20 is even
+
+Testing odd numbers:
+1 is odd
+3 is odd
+5 is odd
+7 is odd
+11 is odd
+21 is odd
+
+Testing a larger number:
+42 is even
+99 is odd
+
+Recursive trace for number 5:
+is_even(5):
+  is_even(5)
+    return is_odd(4)
+    is_odd(4)
+      return is_even(3)
+      is_even(3)
+        return is_odd(2)
+        is_odd(2)
+          return is_even(1)
+          is_even(1)
+            return false (Base case: 1 is odd)
+          is_odd(2) returns false
+        is_even(3) returns false
+      is_odd(4) returns false
+    is_even(5) returns false`,
+		},
 	}
 
 	for _, example := range examples {

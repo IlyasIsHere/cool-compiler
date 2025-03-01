@@ -19,7 +19,6 @@ func main() {
 	}
 
 	input, err := os.ReadFile(os.Args[1])
-	// input, err := os.ReadFile("test.cl")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 		os.Exit(1)
@@ -74,5 +73,16 @@ func main() {
 		fmt.Printf("Warning: Compilation with clang failed. You may need to install LLVM/Clang.\n")
 	} else {
 		fmt.Println("Compilation successful. Executable: output.exe")
+
+		// Run the compiled executable
+		fmt.Println("Running the compiled program...")
+		execCmd := exec.Command("./output.exe")
+		execCmd.Stdout = os.Stdout
+		execCmd.Stderr = os.Stderr
+
+		if err := execCmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error running executable: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }

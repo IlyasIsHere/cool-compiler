@@ -587,13 +587,13 @@ func (cg *CodeGenerator) generateMethod(class *ast.Class, method *ast.Method) {
 	if className == "Object" {
 		switch methodName {
 		case "abort":
-			cg.generateObjectAbortMethod(class, method)
+			cg.generateObjectAbortMethod()
 			return
 		case "type_name":
-			cg.generateTypeNameMethod(class, method)
+			cg.generateTypeNameMethod()
 			return
 		case "copy":
-			cg.generateCopyMethod(class, method)
+			cg.generateCopyMethod()
 			return
 		}
 	}
@@ -601,16 +601,16 @@ func (cg *CodeGenerator) generateMethod(class *ast.Class, method *ast.Method) {
 	if className == "IO" {
 		switch methodName {
 		case "out_string":
-			cg.generateIOOutStringMethod(class, method)
+			cg.generateIOOutStringMethod()
 			return
 		case "out_int":
-			cg.generateIOOutIntMethod(class, method)
+			cg.generateIOOutIntMethod()
 			return
 		case "in_string":
-			cg.generateIOInStringMethod(class, method)
+			cg.generateIOInStringMethod()
 			return
 		case "in_int":
-			cg.generateIOInIntMethod(class, method)
+			cg.generateIOInIntMethod()
 			return
 		}
 	}
@@ -619,13 +619,13 @@ func (cg *CodeGenerator) generateMethod(class *ast.Class, method *ast.Method) {
 	if className == "String" {
 		switch methodName {
 		case "length":
-			cg.generateStringLengthMethod(class, method)
+			cg.generateStringLengthMethod()
 			return
 		case "concat":
-			cg.generateStringConcatMethod(class, method)
+			cg.generateStringConcatMethod()
 			return
 		case "substr":
-			cg.generateStringSubstrMethod(class, method)
+			cg.generateStringSubstrMethod()
 			return
 		}
 	}
@@ -946,10 +946,7 @@ func (cg *CodeGenerator) initializeAttributes(className string, objectPtr value.
 	}
 }
 
-// getObjectRuntimeType gets the runtime type name of an object
-// In a real compiler, this would use runtime type information
-// For our simple implementation, we'll extract it from the object's type
-func (cg *CodeGenerator) getObjectRuntimeType(object value.Value, block *ir.Block) string {
+func (cg *CodeGenerator) getObjectRuntimeType(object value.Value) string {
 	// Handle primitive types first
 	switch object.Type() {
 	case types.I1: // Boolean type
@@ -1006,7 +1003,7 @@ func (cg *CodeGenerator) generateDynamicDispatch(object value.Value, methodName 
 	if _, ok := objPtrType.ElemType.(*types.StructType); !ok {
 		// Handle i8* pointer type - we need to bitcast it to the appropriate type first
 		// Get the object's runtime type name
-		objectTypeName := cg.getObjectRuntimeType(object, block)
+		objectTypeName := cg.getObjectRuntimeType(object)
 
 		// Look up the struct type for this class
 		structType, exists := cg.TypeMap[objectTypeName]
@@ -1020,7 +1017,7 @@ func (cg *CodeGenerator) generateDynamicDispatch(object value.Value, methodName 
 	}
 
 	// Get the object's runtime type
-	objectTypeName := cg.getObjectRuntimeType(object, block)
+	objectTypeName := cg.getObjectRuntimeType(object)
 
 	// Find the correct method implementation by walking the inheritance chain
 	var methodFunc *ir.Func
@@ -1315,11 +1312,13 @@ func (cg *CodeGenerator) generateIfExpression(ifExpr *ast.IfExpression) value.Va
 	// Generate code for the true branch
 	cg.CurrentBlock = trueBlock
 	trueValue := cg.generateExpression(ifExpr.Consequence)
+	trueEndBlock := cg.CurrentBlock
 	cg.CurrentBlock.NewBr(mergeBlock)
 
 	// Generate code for the false branch
 	cg.CurrentBlock = falseBlock
 	falseValue := cg.generateExpression(ifExpr.Alternative)
+	falseEndBlock := cg.CurrentBlock
 	cg.CurrentBlock.NewBr(mergeBlock)
 
 	// Set current block to merge block
@@ -1333,15 +1332,57 @@ func (cg *CodeGenerator) generateIfExpression(ifExpr *ast.IfExpression) value.Va
 	if trueValue.Type().Equal(falseValue.Type()) {
 		resultType = trueValue.Type()
 	} else {
-		// For simplicity, use i8* as a generic object pointer type
-		// In a full implementation, you would calculate the least common ancestor type
-		resultType = types.NewPointer(types.I8)
+		// If one is a boolean (i1) and the other is a pointer, or if types don't match otherwise,
+		// we need to choose a common type
+		_, trueIsPtr := trueValue.Type().(*types.PointerType)
+		_, falseIsPtr := falseValue.Type().(*types.PointerType)
+
+		if trueValue.Type() == types.I1 && falseIsPtr {
+			// Convert boolean to pointer
+			resultType = falseValue.Type()
+			// Cast true value to pointer
+			intPtrType := types.NewPointer(types.I8)
+			trueValue = trueEndBlock.NewIntToPtr(trueValue, intPtrType)
+			if !intPtrType.Equal(resultType) {
+				trueValue = trueEndBlock.NewBitCast(trueValue, resultType)
+			}
+		} else if falseValue.Type() == types.I1 && trueIsPtr {
+			// Convert boolean to pointer
+			resultType = trueValue.Type()
+			// Cast false value to pointer
+			intPtrType := types.NewPointer(types.I8)
+			falseValue = falseEndBlock.NewIntToPtr(falseValue, intPtrType)
+			if !intPtrType.Equal(resultType) {
+				falseValue = falseEndBlock.NewBitCast(falseValue, resultType)
+			}
+		} else {
+			// For simplicity, use i8* as a generic object pointer type
+			// In a full implementation, you would calculate the least common ancestor type
+			resultType = types.NewPointer(types.I8)
+
+			// Cast both values to the common type if needed
+			if !trueValue.Type().Equal(resultType) {
+				if trueValue.Type() == types.I1 {
+					trueValue = trueEndBlock.NewIntToPtr(trueValue, resultType)
+				} else if trueIsPtr {
+					trueValue = trueEndBlock.NewBitCast(trueValue, resultType)
+				}
+			}
+
+			if !falseValue.Type().Equal(resultType) {
+				if falseValue.Type() == types.I1 {
+					falseValue = falseEndBlock.NewIntToPtr(falseValue, resultType)
+				} else if falseIsPtr {
+					falseValue = falseEndBlock.NewBitCast(falseValue, resultType)
+				}
+			}
+		}
 	}
 
 	// Create a PHI node with incoming values right away
 	phi := cg.CurrentBlock.NewPhi(
-		&ir.Incoming{X: trueValue, Pred: trueBlock},
-		&ir.Incoming{X: falseValue, Pred: falseBlock},
+		&ir.Incoming{X: trueValue, Pred: trueEndBlock},
+		&ir.Incoming{X: falseValue, Pred: falseEndBlock},
 	)
 
 	// Set the correct type for the PHI node
@@ -2157,7 +2198,7 @@ func (cg *CodeGenerator) generateCaseExpression(caseExpr *ast.CaseExpression) va
 	cg.CurrentBlock = typeCheckBlock
 
 	// Get the runtime type of the object
-	objectType := cg.getObjectRuntimeType(exprValue, typeCheckBlock)
+	objectType := cg.getObjectRuntimeType(exprValue)
 
 	// Keep track of the current branching block
 	branchingBlock := typeCheckBlock
@@ -2298,13 +2339,18 @@ func (cg *CodeGenerator) generateCaseExpression(caseExpr *ast.CaseExpression) va
 		if !val.Type().Equal(resultType) {
 			// Cast to the common type
 			// This would require custom casting logic in a real implementation
-			// For simplicity, we'll use a bitcast for pointer types
 			if _, isResultPtr := resultType.(*types.PointerType); isResultPtr {
-				if _, isValPtr := val.Type().(*types.PointerType); isValPtr {
+				if val.Type() == types.I1 {
+					// Convert boolean to pointer
+					val = branchEndBlocks[i].NewIntToPtr(val, types.NewPointer(types.I8))
+					if !types.NewPointer(types.I8).Equal(resultType) {
+						val = branchEndBlocks[i].NewBitCast(val, resultType)
+					}
+				} else if _, isValPtr := val.Type().(*types.PointerType); isValPtr {
 					// Bitcast between pointer types
 					val = branchEndBlocks[i].NewBitCast(val, resultType)
 				} else {
-					// Cast from non-pointer to pointer not handled here
+					// For other primitive types that need to be cast to pointer
 					panic(fmt.Sprintf("cannot cast from %v to %v", val.Type(), resultType))
 				}
 			} else {
@@ -2497,27 +2543,10 @@ func (cg *CodeGenerator) DefineBuiltInClasses() {
 		types.NewPointer(types.I8), // actual string data (index 1)
 	)
 	cg.TypeMap["String"] = stringStruct
-
-	// // Declare String.concat and String.substr functions
-	// stringType := cg.TypeMap["String"]
-	// cg.Module.NewFunc(
-	// 	"String.concat",
-	// 	types.NewPointer(stringType), // Returns a pointer to the new String object
-	// 	ir.NewParam("self", types.NewPointer(stringType)),
-	// 	ir.NewParam("other", types.NewPointer(stringType)),
-	// )
-
-	// cg.Module.NewFunc(
-	// 	"String.substr",
-	// 	types.NewPointer(stringType), // Returns a pointer to the new String object
-	// 	ir.NewParam("self", types.NewPointer(stringType)),
-	// 	ir.NewParam("start", types.I32),
-	// 	ir.NewParam("length", types.I32),
-	// )
 }
 
 // Add this new method to handle IO.out_string code generation
-func (cg *CodeGenerator) generateIOOutStringMethod(class *ast.Class, method *ast.Method) {
+func (cg *CodeGenerator) generateIOOutStringMethod() {
 	// Define the out_string method for IO class
 	funcName := "IO.out_string"
 
@@ -2556,8 +2585,8 @@ func (cg *CodeGenerator) generateIOOutStringMethod(class *ast.Class, method *ast
 }
 
 // Add this new method to handle IO.out_int code generation
-func (cg *CodeGenerator) generateIOOutIntMethod(class *ast.Class, method *ast.Method) {
-	funcName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
+func (cg *CodeGenerator) generateIOOutIntMethod() {
+	funcName := "IO.out_int"
 	ioType := cg.TypeMap["IO"]
 
 	// Get or create the function
@@ -2596,8 +2625,8 @@ func (cg *CodeGenerator) generateIOOutIntMethod(class *ast.Class, method *ast.Me
 }
 
 // Add these new methods to handle Object built-in methods
-func (cg *CodeGenerator) generateObjectAbortMethod(class *ast.Class, method *ast.Method) {
-	funcName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
+func (cg *CodeGenerator) generateObjectAbortMethod() {
+	funcName := "Object.abort"
 	objType := cg.TypeMap["Object"]
 
 	// Get or create the function
@@ -2624,8 +2653,8 @@ func (cg *CodeGenerator) generateObjectAbortMethod(class *ast.Class, method *ast
 	entry.NewUnreachable() // exit doesn't return
 }
 
-func (cg *CodeGenerator) generateTypeNameMethod(class *ast.Class, method *ast.Method) {
-	funcName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
+func (cg *CodeGenerator) generateTypeNameMethod() {
+	funcName := "Object.type_name"
 	objType := cg.TypeMap["Object"]
 
 	// Get or create the function
@@ -2648,7 +2677,7 @@ func (cg *CodeGenerator) generateTypeNameMethod(class *ast.Class, method *ast.Me
 	entry := funcDecl.NewBlock("entry")
 
 	// Create class name string
-	className := class.Name.Value
+	className := "Object"
 	strConst := constant.NewCharArrayFromString(className + "\x00")
 	global := cg.Module.NewGlobalDef(fmt.Sprintf(".str.%s", className), strConst)
 	global.Immutable = true
@@ -2660,8 +2689,8 @@ func (cg *CodeGenerator) generateTypeNameMethod(class *ast.Class, method *ast.Me
 	entry.NewRet(gep)
 }
 
-func (cg *CodeGenerator) generateCopyMethod(class *ast.Class, method *ast.Method) {
-	funcName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
+func (cg *CodeGenerator) generateCopyMethod() {
+	funcName := "Object.copy"
 	objType := cg.TypeMap["Object"]
 
 	// Get or create the function
@@ -2688,8 +2717,8 @@ func (cg *CodeGenerator) generateCopyMethod(class *ast.Class, method *ast.Method
 }
 
 // Add this new method to handle IO.in_int
-func (cg *CodeGenerator) generateIOInIntMethod(class *ast.Class, method *ast.Method) {
-	funcName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
+func (cg *CodeGenerator) generateIOInIntMethod() {
+	funcName := "IO.in_int"
 	ioType := cg.TypeMap["IO"]
 
 	// Get the function if it already exists
@@ -2734,8 +2763,8 @@ func (cg *CodeGenerator) generateIOInIntMethod(class *ast.Class, method *ast.Met
 }
 
 // Add this new method to handle IO.in_string
-func (cg *CodeGenerator) generateIOInStringMethod(class *ast.Class, method *ast.Method) {
-	funcName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
+func (cg *CodeGenerator) generateIOInStringMethod() {
+	funcName := "IO.in_string"
 	ioType := cg.TypeMap["IO"]
 
 	// Get the function if it already exists
@@ -2791,8 +2820,8 @@ func (cg *CodeGenerator) generateIOInStringMethod(class *ast.Class, method *ast.
 }
 
 // Add string method implementations
-func (cg *CodeGenerator) generateStringLengthMethod(class *ast.Class, method *ast.Method) {
-	funcName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
+func (cg *CodeGenerator) generateStringLengthMethod() {
+	funcName := "String.length"
 	stringType := cg.TypeMap["String"]
 
 	// Get the function if it already exists
@@ -2845,12 +2874,12 @@ func (cg *CodeGenerator) generateStringLengthMethod(class *ast.Class, method *as
 }
 
 // generateStringConcatMethod generates LLVM IR for String.concat
-func (cg *CodeGenerator) generateStringConcatMethod(class *ast.Class, method *ast.Method) {
+func (cg *CodeGenerator) generateStringConcatMethod() {
 	// Find the function (it should already be declared)
-	mangledName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
+	funcName := "String.concat"
 	var concatFunc *ir.Func
 	for _, f := range cg.Module.Funcs {
-		if f.Name() == mangledName {
+		if f.Name() == funcName {
 			concatFunc = f
 			break
 		}
@@ -2860,7 +2889,7 @@ func (cg *CodeGenerator) generateStringConcatMethod(class *ast.Class, method *as
 		// If function not found, create it
 		stringType := cg.TypeMap["String"]
 		concatFunc = cg.Module.NewFunc(
-			mangledName,
+			funcName,
 			types.NewPointer(types.I8), // Return type is String
 			ir.NewParam("self", types.NewPointer(stringType)),
 			ir.NewParam("s", types.NewPointer(types.I8)), // String to concatenate
@@ -2941,12 +2970,12 @@ func (cg *CodeGenerator) generateStringConcatMethod(class *ast.Class, method *as
 }
 
 // generateStringSubstrMethod generates LLVM IR for String.substr
-func (cg *CodeGenerator) generateStringSubstrMethod(class *ast.Class, method *ast.Method) {
+func (cg *CodeGenerator) generateStringSubstrMethod() {
 	// Find the function (it should already be declared)
-	mangledName := fmt.Sprintf("%s.%s", class.Name.Value, method.Name.Value)
+	funcName := "String.substr"
 	var substrFunc *ir.Func
 	for _, f := range cg.Module.Funcs {
-		if f.Name() == mangledName {
+		if f.Name() == funcName {
 			substrFunc = f
 			break
 		}
@@ -2956,7 +2985,7 @@ func (cg *CodeGenerator) generateStringSubstrMethod(class *ast.Class, method *as
 		// If function not found, create it
 		stringType := cg.TypeMap["String"]
 		substrFunc = cg.Module.NewFunc(
-			mangledName,
+			funcName,
 			types.NewPointer(types.I8), // Return type is String
 			ir.NewParam("self", types.NewPointer(stringType)),
 			ir.NewParam("i", types.I32), // Starting index
