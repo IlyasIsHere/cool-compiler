@@ -3,10 +3,10 @@
 %Int = type { i8* }
 %String = type { i8* }
 %Bool = type { i8* }
-%Animal = type { i8*, i8* }
-%Dog = type { i8*, i8*, i8* }
-%Cat = type { i8*, i8* }
-%Main = type { i8*, %IO* }
+%A = type { i8* }
+%B = type { i8* }
+%C = type { i8* }
+%Main = type { i8* }
 
 @.str.empty = constant [1 x i8] c"\00"
 @vtable.Object = global [3 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
@@ -14,23 +14,19 @@
 @vtable.Int = global [3 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
 @vtable.String = global [6 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (i8* (%String*, i8*)* @String.concat to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i32 (%String*)* @String.length to i8*), i8* bitcast (i8* (%String*, i32, i32)* @String.substr to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
 @vtable.Bool = global [3 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
-@vtable.Animal = global [10 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (%Object* (%Animal*)* @Animal.eat to i8*), i8* bitcast (i32 (%IO*)* @IO.in_int to i8*), i8* bitcast (i8* (%IO*)* @IO.in_string to i8*), i8* bitcast (%IO* (%IO*, i32)* @IO.out_int to i8*), i8* bitcast (%IO* (%IO*, i8*)* @IO.out_string to i8*), i8* bitcast (%Animal* (%Animal*, i8*)* @Animal.setName to i8*), i8* bitcast (%Object* (%Animal*)* @Animal.speak to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
-@vtable.Dog = global [12 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (%Object* (%Animal*)* @Animal.eat to i8*), i8* bitcast (i32 (%IO*)* @IO.in_int to i8*), i8* bitcast (i8* (%IO*)* @IO.in_string to i8*), i8* bitcast (%Dog* (%Dog*, i8*)* @Dog.init to i8*), i8* bitcast (%IO* (%IO*, i32)* @IO.out_int to i8*), i8* bitcast (%IO* (%IO*, i8*)* @IO.out_string to i8*), i8* bitcast (%Animal* (%Animal*, i8*)* @Animal.setName to i8*), i8* bitcast (%Object* (%Dog*)* @Dog.speak to i8*), i8* bitcast (%Object* (%Dog*)* @Dog.specialEat to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
-@vtable.Cat = global [11 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (%Object* (%Animal*)* @Animal.eat to i8*), i8* bitcast (i32 (%IO*)* @IO.in_int to i8*), i8* bitcast (i8* (%IO*)* @IO.in_string to i8*), i8* bitcast (%IO* (%IO*, i32)* @IO.out_int to i8*), i8* bitcast (%IO* (%IO*, i8*)* @IO.out_string to i8*), i8* bitcast (%Object* (%Cat*)* @Cat.purr to i8*), i8* bitcast (%Animal* (%Animal*, i8*)* @Animal.setName to i8*), i8* bitcast (%Object* (%Cat*)* @Cat.speak to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
-@vtable.Main = global [4 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (%Object* (%Main*)* @Main.main to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
-@.str10 = internal constant [16 x i8] c" makes a sound\0A\00"
-@.str11 = internal constant [12 x i8] c" eats food\0A\00"
-@.str12 = internal constant [4 x i8] c"Dog\00"
-@.str13 = internal constant [9 x i8] c" barks!\0A\00"
+@vtable.A = global [6 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i32 (%A*)* @A.method1 to i8*), i8* bitcast (i32 (%A*)* @A.method2 to i8*), i8* bitcast (i32 (%A*)* @A.method3 to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
+@vtable.B = global [6 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i32 (%A*)* @A.method1 to i8*), i8* bitcast (i32 (%B*)* @B.method2 to i8*), i8* bitcast (i32 (%B*)* @B.method3 to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
+@vtable.C = global [6 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i32 (%A*)* @A.method1 to i8*), i8* bitcast (i32 (%B*)* @B.method2 to i8*), i8* bitcast (i32 (%C*)* @C.method3 to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
+@vtable.Main = global [8 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i32 (%IO*)* @IO.in_int to i8*), i8* bitcast (i8* (%IO*)* @IO.in_string to i8*), i8* bitcast (%Object* (%Main*)* @Main.main to i8*), i8* bitcast (%IO* (%IO*, i32)* @IO.out_int to i8*), i8* bitcast (%IO* (%IO*, i8*)* @IO.out_string to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
+@.str10 = internal constant [2 x i8] c" \00"
+@.str11 = internal constant [2 x i8] c"\0A\00"
+@.str12 = internal constant [2 x i8] c" \00"
+@.str13 = internal constant [2 x i8] c"\0A\00"
 @.str14 = internal constant [2 x i8] c" \00"
-@.str15 = internal constant [9 x i8] c" meows!\0A\00"
-@.str16 = internal constant [15 x i8] c" purrs softly\0A\00"
-@.str17 = internal constant [7 x i8] c"Animal\00"
-@.str18 = internal constant [7 x i8] c"Animal\00"
-@.str19 = internal constant [9 x i8] c"Labrador\00"
-@.str20 = internal constant [4 x i8] c"Rex\00"
-@.str21 = internal constant [7 x i8] c"Animal\00"
-@.str22 = internal constant [9 x i8] c"Whiskers\00"
+@.str15 = internal constant [2 x i8] c"\0A\00"
+@.str16 = internal constant [2 x i8] c" \00"
+@.str17 = internal constant [2 x i8] c" \00"
+@.str18 = internal constant [2 x i8] c"\0A\00"
 @.str.Object = constant [7 x i8] c"Object\00"
 @.str.fmt = global [3 x i8] c"%s\00"
 @.str.fmt.int = constant [3 x i8] c"%d\00"
@@ -224,131 +220,97 @@ declare i8* @strcat(i8* %dest, i8* %src)
 
 declare i8* @strncpy(i8* %dest, i8* %src, i32 %n)
 
-define %Object* @Animal.speak(%Animal* %self) {
+define i32 @A.method1(%A* %self) {
 entry:
-	%0 = getelementptr %Animal, %Animal* %self, i32 0, i32 1
-	%1 = load i8*, i8** %0
-	%2 = call %IO* @IO.out_string(%Animal* %self, i8* %1)
-	%3 = call %IO* @IO.out_string(%IO* %2, i8* getelementptr ([16 x i8], [16 x i8]* @.str10, i32 0, i32 0))
-	%4 = bitcast %IO* %2 to %Object*
-	ret %Object* %4
+	ret i32 1
 }
 
-define %Object* @Animal.eat(%Animal* %self) {
+define i32 @A.method2(%A* %self) {
 entry:
-	%0 = getelementptr %Animal, %Animal* %self, i32 0, i32 1
-	%1 = load i8*, i8** %0
-	%2 = call %IO* @IO.out_string(%Animal* %self, i8* %1)
-	%3 = call %IO* @IO.out_string(%IO* %2, i8* getelementptr ([12 x i8], [12 x i8]* @.str11, i32 0, i32 0))
-	%4 = bitcast %IO* %2 to %Object*
-	ret %Object* %4
+	ret i32 2
 }
 
-define %Animal* @Animal.setName(%Animal* %self, i8* %n) {
+define i32 @A.method3(%A* %self) {
 entry:
-	%0 = getelementptr %Animal, %Animal* %self, i32 0, i32 1
-	store i8* %n, i8** %0
-	ret %Animal* %self
+	ret i32 3
 }
 
-define %Dog* @Dog.init(%Dog* %self, i8* %b) {
+define i32 @B.method2(%B* %self) {
 entry:
-	%0 = getelementptr %Dog, %Dog* %self, i32 0, i32 2
-	store i8* %b, i8** %0
-	%1 = getelementptr %Dog, %Dog* %self, i32 0, i32 1
-	store i8* getelementptr ([4 x i8], [4 x i8]* @.str12, i32 0, i32 0), i8** %1
-	ret %Dog* %self
+	ret i32 22
 }
 
-define %Object* @Dog.speak(%Dog* %self) {
+define i32 @B.method3(%B* %self) {
 entry:
-	%0 = getelementptr %Dog, %Dog* %self, i32 0, i32 1
-	%1 = load i8*, i8** %0
-	%2 = call %IO* @IO.out_string(%Dog* %self, i8* %1)
-	%3 = call %IO* @IO.out_string(%IO* %2, i8* getelementptr ([9 x i8], [9 x i8]* @.str13, i32 0, i32 0))
-	%4 = bitcast %IO* %2 to %Object*
-	ret %Object* %4
+	ret i32 35
 }
 
-define %Object* @Dog.specialEat(%Dog* %self) {
+define i32 @C.method3(%C* %self) {
 entry:
-	%0 = getelementptr %Dog, %Dog* %self, i32 0, i32 2
-	%1 = load i8*, i8** %0
-	%2 = call %IO* @IO.out_string(%Dog* %self, i8* %1)
-	%3 = call %IO* @IO.out_string(%IO* %2, i8* getelementptr ([2 x i8], [2 x i8]* @.str14, i32 0, i32 0))
-	%4 = call %Object* @Animal.eat(%Dog* %self)
-	%5 = bitcast %Object* %4 to %Object*
-	ret %Object* %5
-}
-
-define %Object* @Cat.speak(%Cat* %self) {
-entry:
-	%0 = getelementptr %Cat, %Cat* %self, i32 0, i32 1
-	%1 = load i8*, i8** %0
-	%2 = call %IO* @IO.out_string(%Cat* %self, i8* %1)
-	%3 = call %IO* @IO.out_string(%IO* %2, i8* getelementptr ([9 x i8], [9 x i8]* @.str15, i32 0, i32 0))
-	%4 = bitcast %IO* %2 to %Object*
-	ret %Object* %4
-}
-
-define %Object* @Cat.purr(%Cat* %self) {
-entry:
-	%0 = getelementptr %Cat, %Cat* %self, i32 0, i32 1
-	%1 = load i8*, i8** %0
-	%2 = call %IO* @IO.out_string(%Cat* %self, i8* %1)
-	%3 = call %IO* @IO.out_string(%IO* %2, i8* getelementptr ([15 x i8], [15 x i8]* @.str16, i32 0, i32 0))
-	%4 = bitcast %IO* %2 to %Object*
-	ret %Object* %4
+	ret i32 33
 }
 
 define %Object* @Main.main(%Main* %self) {
 entry:
-	%0 = alloca %Animal*
-	%1 = call i8* @malloc(%Animal* getelementptr (%Animal, %Animal* null, i32 1))
-	%2 = bitcast i8* %1 to %Animal*
-	%3 = getelementptr %Animal, %Animal* %2, i32 0, i32 0
-	%4 = bitcast [10 x i8*]* @vtable.Animal to i8*
+	%0 = alloca %A*
+	%1 = call i8* @malloc(%A* getelementptr (%A, %A* null, i32 1))
+	%2 = bitcast i8* %1 to %A*
+	%3 = getelementptr %A, %A* %2, i32 0, i32 0
+	%4 = bitcast [6 x i8*]* @vtable.A to i8*
 	store i8* %4, i8** %3
-	%5 = getelementptr %Animal, %Animal* %2, i32 0, i32 1
-	store i8* getelementptr ([7 x i8], [7 x i8]* @.str17, i32 0, i32 0), i8** %5
-	store %Animal* %2, %Animal** %0
-	%6 = alloca %Dog*
-	%7 = call i8* @malloc(%Dog* getelementptr (%Dog, %Dog* null, i32 1))
-	%8 = bitcast i8* %7 to %Dog*
-	%9 = getelementptr %Dog, %Dog* %8, i32 0, i32 0
-	%10 = bitcast [12 x i8*]* @vtable.Dog to i8*
-	store i8* %10, i8** %9
-	%11 = getelementptr %Dog, %Dog* %8, i32 0, i32 1
-	store i8* getelementptr ([7 x i8], [7 x i8]* @.str18, i32 0, i32 0), i8** %11
-	%12 = getelementptr %Dog, %Dog* %8, i32 0, i32 2
-	store i8* getelementptr ([1 x i8], [1 x i8]* @.str.empty, i32 0, i32 0), i8** %12
-	%13 = call %Dog* @Dog.init(%Dog* %8, i8* getelementptr ([9 x i8], [9 x i8]* @.str19, i32 0, i32 0))
-	%14 = call %Animal* @Animal.setName(%Dog* %13, i8* getelementptr ([4 x i8], [4 x i8]* @.str20, i32 0, i32 0))
-	%15 = bitcast %Animal* %14 to %Dog*
-	store %Dog* %15, %Dog** %6
-	%16 = alloca %Cat*
-	%17 = call i8* @malloc(%Cat* getelementptr (%Cat, %Cat* null, i32 1))
-	%18 = bitcast i8* %17 to %Cat*
-	%19 = getelementptr %Cat, %Cat* %18, i32 0, i32 0
-	%20 = bitcast [11 x i8*]* @vtable.Cat to i8*
-	store i8* %20, i8** %19
-	%21 = getelementptr %Cat, %Cat* %18, i32 0, i32 1
-	store i8* getelementptr ([7 x i8], [7 x i8]* @.str21, i32 0, i32 0), i8** %21
-	%22 = call %Animal* @Animal.setName(%Cat* %18, i8* getelementptr ([9 x i8], [9 x i8]* @.str22, i32 0, i32 0))
-	%23 = bitcast %Animal* %22 to %Cat*
-	store %Cat* %23, %Cat** %16
-	%24 = load %Animal*, %Animal** %0
-	%25 = call %Object* @Animal.speak(%Animal* %24)
-	%26 = load %Dog*, %Dog** %6
-	%27 = call %Object* @Dog.speak(%Dog* %26)
-	%28 = load %Cat*, %Cat** %16
-	%29 = call %Object* @Cat.speak(%Cat* %28)
-	%30 = load %Dog*, %Dog** %6
-	%31 = call %Object* @Dog.specialEat(%Dog* %30)
-	%32 = load %Cat*, %Cat** %16
-	%33 = call %Object* @Cat.purr(%Cat* %32)
-	%34 = bitcast %Object* %33 to %Object*
-	ret %Object* %34
+	store %A* %2, %A** %0
+	%5 = alloca %B*
+	%6 = call i8* @malloc(%B* getelementptr (%B, %B* null, i32 1))
+	%7 = bitcast i8* %6 to %B*
+	%8 = getelementptr %B, %B* %7, i32 0, i32 0
+	%9 = bitcast [6 x i8*]* @vtable.B to i8*
+	store i8* %9, i8** %8
+	store %B* %7, %B** %5
+	%10 = alloca %C*
+	%11 = call i8* @malloc(%C* getelementptr (%C, %C* null, i32 1))
+	%12 = bitcast i8* %11 to %C*
+	%13 = getelementptr %C, %C* %12, i32 0, i32 0
+	%14 = bitcast [6 x i8*]* @vtable.C to i8*
+	store i8* %14, i8** %13
+	store %C* %12, %C** %10
+	%15 = load %C*, %C** %10
+	%16 = call i32 @A.method1(%C* %15)
+	%17 = call %IO* @IO.out_int(%Main* %self, i32 %16)
+	%18 = call %IO* @IO.out_string(%IO* %17, i8* getelementptr ([2 x i8], [2 x i8]* @.str10, i32 0, i32 0))
+	%19 = load %C*, %C** %10
+	%20 = call i32 @A.method1(%C* %19)
+	%21 = call %IO* @IO.out_int(%IO* %17, i32 %20)
+	%22 = call %IO* @IO.out_string(%Main* %self, i8* getelementptr ([2 x i8], [2 x i8]* @.str11, i32 0, i32 0))
+	%23 = load %C*, %C** %10
+	%24 = call i32 @B.method2(%C* %23)
+	%25 = call %IO* @IO.out_int(%Main* %self, i32 %24)
+	%26 = call %IO* @IO.out_string(%IO* %25, i8* getelementptr ([2 x i8], [2 x i8]* @.str12, i32 0, i32 0))
+	%27 = load %C*, %C** %10
+	%28 = call i32 @B.method2(%C* %27)
+	%29 = call %IO* @IO.out_int(%IO* %25, i32 %28)
+	%30 = call %IO* @IO.out_string(%Main* %self, i8* getelementptr ([2 x i8], [2 x i8]* @.str13, i32 0, i32 0))
+	%31 = load %B*, %B** %5
+	%32 = call i32 @B.method2(%B* %31)
+	%33 = call %IO* @IO.out_int(%Main* %self, i32 %32)
+	%34 = call %IO* @IO.out_string(%IO* %33, i8* getelementptr ([2 x i8], [2 x i8]* @.str14, i32 0, i32 0))
+	%35 = load %B*, %B** %5
+	%36 = call i32 @A.method2(%B* %35)
+	%37 = call %IO* @IO.out_int(%IO* %33, i32 %36)
+	%38 = call %IO* @IO.out_string(%Main* %self, i8* getelementptr ([2 x i8], [2 x i8]* @.str15, i32 0, i32 0))
+	%39 = load %C*, %C** %10
+	%40 = call i32 @C.method3(%C* %39)
+	%41 = call %IO* @IO.out_int(%Main* %self, i32 %40)
+	%42 = call %IO* @IO.out_string(%IO* %41, i8* getelementptr ([2 x i8], [2 x i8]* @.str16, i32 0, i32 0))
+	%43 = load %C*, %C** %10
+	%44 = call i32 @A.method3(%C* %43)
+	%45 = call %IO* @IO.out_int(%IO* %41, i32 %44)
+	%46 = call %IO* @IO.out_string(%IO* %41, i8* getelementptr ([2 x i8], [2 x i8]* @.str17, i32 0, i32 0))
+	%47 = load %C*, %C** %10
+	%48 = call i32 @B.method3(%C* %47)
+	%49 = call %IO* @IO.out_int(%IO* %41, i32 %48)
+	%50 = call %IO* @IO.out_string(%Main* %self, i8* getelementptr ([2 x i8], [2 x i8]* @.str18, i32 0, i32 0))
+	%51 = bitcast %IO* %50 to %Object*
+	ret %Object* %51
 }
 
 define i32 @main() {
@@ -356,27 +318,13 @@ entry:
 	%0 = call i8* @malloc(%Main* getelementptr (%Main, %Main* null, i32 1))
 	%1 = bitcast i8* %0 to %Main*
 	%2 = getelementptr %Main, %Main* %1, i32 0, i32 0
-	%3 = bitcast [4 x i8*]* @vtable.Main to i8*
+	%3 = bitcast [8 x i8*]* @vtable.Main to i8*
 	store i8* %3, i8** %2
-	%4 = getelementptr %Main, %Main* %1, i32 0, i32 1
-	%5 = call i8* @malloc(%IO* getelementptr (%IO, %IO* null, i32 1))
-	%6 = bitcast i8* %5 to %IO*
-	%7 = getelementptr %IO, %IO* %6, i32 0, i32 0
-	%8 = bitcast [7 x i8*]* @vtable.IO to i8*
-	store i8* %8, i8** %7
-	store %IO* %6, %IO** %4
-	%9 = alloca %Main*
-	store %Main* %1, %Main** %9
-	%10 = getelementptr %Main, %Main* %1, i32 0, i32 1
-	%11 = call i8* @malloc(%IO* getelementptr (%IO, %IO* null, i32 1))
-	%12 = bitcast i8* %11 to %IO*
-	%13 = getelementptr %IO, %IO* %12, i32 0, i32 0
-	%14 = bitcast [7 x i8*]* @vtable.IO to i8*
-	store i8* %14, i8** %13
-	store %IO* %12, %IO** %10
-	%15 = getelementptr [4 x i8*], [4 x i8*]* @vtable.Main, i32 0, i32 2
-	%16 = load i8*, i8** %15
-	%17 = bitcast i8* %16 to i8* (%Main*)*
-	%18 = call i8* %17(%Main* %1)
+	%4 = alloca %Main*
+	store %Main* %1, %Main** %4
+	%5 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 4
+	%6 = load i8*, i8** %5
+	%7 = bitcast i8* %6 to i8* (%Main*)*
+	%8 = call i8* %7(%Main* %1)
 	ret i32 0
 }

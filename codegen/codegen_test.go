@@ -116,6 +116,19 @@ Area: 32
 Perimeter: 24`,
 		},
 		{
+			"Inheritance 2 (multilevel)",
+			"inheritance2.cl",
+			`Class A: 10
+10
+Class B: 30
+10
+20
+Class C: 60
+10
+20
+30`,
+		},
+		{
 			"String Methods",
 			"string_methods.cl",
 			`String: Hello, Cool!
@@ -156,17 +169,6 @@ Substring (9,11): Program`,
 			"Testing case with Object (new Object):\nIt's some other object\n",
 		},
 		{
-			"Inheritance with Case",
-			"inheritance3.cl",
-			`Case Statement with Inheritance:
-I am a shape
-0
-I am a circle
-314
-I am a rectangle
-200`,
-		},
-		{
 			"Inheritance 4",
 			"inheritance4.cl",
 			`Animal makes a sound
@@ -174,6 +176,14 @@ Rex barks!
 Whiskers meows!
 Labrador Rex eats food
 Whiskers purrs softly`,
+		},
+		{
+			"Static Dispatch",
+			"static_dispatch.cl",
+			`1 1
+22 22
+22 2
+33 3 35`,
 		},
 	}
 

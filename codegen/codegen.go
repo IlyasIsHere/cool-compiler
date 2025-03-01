@@ -1876,43 +1876,36 @@ func (cg *CodeGenerator) generateDotCallExpression(dotCall *ast.DotCallExpressio
 func (cg *CodeGenerator) generateStaticDispatch(object value.Value, typeName string, methodName string, args []value.Value) value.Value {
 	block := cg.CurrentBlock
 
-	// Look up the method in the specified class's vtable
-	// In a static dispatch, we bypass dynamic dispatch and directly call the method of the specified type
+	// Find the actual method function by name
+	methodFuncName := fmt.Sprintf("%s.%s", typeName, methodName)
+	var methodFunc *ir.Func
 
-	// First, get the vtable for the specified type
-	vtable, exists := cg.VTables[typeName]
-	if !exists {
-		panic(fmt.Sprintf("unknown type in static dispatch: %s", typeName))
+	// Look for the method in the module
+	for _, f := range cg.Module.Funcs {
+		if f.Name() == methodFuncName {
+			methodFunc = f
+			break
+		}
 	}
 
-	// Get the global vtable value
-	vtablePtr := vtable
-
-	// Find the method's index in the vtable
-	// This would require a mapping from method names to vtable indices
-	// For simplicity, we'll assume there's a helper function that finds the method's index
-	methodIndex := 0 // Placeholder - would need actual implementation
-
-	// Load the function pointer from the vtable
-	// In LLVM IR, this involves a getelementptr to get to the right slot, then a load
-	gepIndices := []value.Value{
-		constant.NewInt(types.I32, 0),                  // First index is always 0 for struct GEP
-		constant.NewInt(types.I32, int64(methodIndex)), // Second index is the method index
+	if methodFunc == nil {
+		panic(fmt.Sprintf("method %s not found in class %s", methodName, typeName))
 	}
 
-	// Get pointer to the method slot in the vtable
-	methodSlotPtr := block.NewGetElementPtr(vtablePtr.ContentType, vtablePtr, gepIndices...)
+	// Ensure the object is the first argument (self)
+	var allArgs []value.Value
+	if len(args) > 0 && args[0] == object {
+		// Object is already the first argument, use args directly
+		allArgs = args
+	} else {
+		// Create a new list of arguments starting with the object itself (self)
+		allArgs = make([]value.Value, 0, len(args)+1)
+		allArgs = append(allArgs, object) // Add 'self' as the first argument
+		allArgs = append(allArgs, args...)
+	}
 
-	// Load the method function pointer
-	methodPtr := block.NewLoad(types.NewPointer(types.I8), methodSlotPtr)
-
-	// Cast the i8* function pointer to the correct function type
-	// For a real implementation, we would need to know the function's signature
-	funcType := types.NewPointer(types.NewFunc(types.Void)) // Placeholder - need actual signature
-	castedMethodPtr := block.NewBitCast(methodPtr, funcType)
-
-	// Call the method with the provided arguments
-	call := block.NewCall(castedMethodPtr, args...)
+	// In static dispatch, we call the method directly by name rather than through the vtable
+	call := block.NewCall(methodFunc, allArgs...)
 
 	return call
 }

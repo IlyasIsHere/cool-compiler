@@ -31,11 +31,14 @@ class Main inherits IO {
             objC : C <- new C
         in {
             out_string(objA.identify()).out_string(": ").out_int(objA.getA()).out_string("\n");
+            out_int(objA.getA()).out_string("\n");
             out_string(objB.identify()).out_string(": ").out_int(objB.getA() + objB.getB()).out_string("\n");
+            out_int(objB.getA()).out_string("\n");
+            out_int(objB.getB()).out_string("\n");
+            out_string(objC.identify()).out_string(": ").out_int(objC.getA() + objC.getB() + objC.getC()).out_string("\n");
             out_int(objC.getA()).out_string("\n");
             out_int(objC.getB()).out_string("\n");
             out_int(objC.getC()).out_string("\n");
-            out_string(objC.identify()).out_string(": ").out_int(objC.getA() + objC.getB() + objC.getC()).out_string("\n");
         }
     };
 };
