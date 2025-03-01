@@ -4,13 +4,10 @@ class Main {
           message : String,
           number : Int
       in {
-         io.out_string("Enter a message: ");
-         message <- io.in_string();
-         io.out_string("You entered: ").out_string(message).out_string("\n");
-         
          io.out_string("Enter a number: ");
          number <- io.in_int();
          io.out_string("You entered the number: ").out_int(number).out_string("\n");
+         io.out_string("Double of your number: ").out_int(number * 2);
          
          io;
       }

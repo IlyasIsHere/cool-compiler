@@ -1,8 +1,9 @@
 class Main inherits IO {
    main() : Object {
-      let x : Int <- 10 in
-          {
-         case x of
+      let s : String <- "Hello" in 
+      {
+         out_string("Testing case with String (\"Hello\"):\n");
+         case s of
             s : String => out_string("It's a string: ").out_string(s).out_string("\n");
             i : Int => out_string("It's an integer: ").out_int(i).out_string("\n");
             b : Bool => out_string("It's a boolean\n");
@@ -10,4 +11,4 @@ class Main inherits IO {
          esac;
       }
    };
-};
+}; 
