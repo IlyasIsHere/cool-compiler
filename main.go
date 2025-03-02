@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -64,7 +65,12 @@ func main() {
 	fmt.Printf("LLVM IR code generated successfully and written to %s\n", outputFilename)
 
 	var cmd *exec.Cmd
-	cmd = exec.Command("clang", "-Wno-deprecated", outputFilename, "-o", "output.exe", "-llegacy_stdio_definitions")
+	outputName := "output.exe"
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("clang", "-Wno-deprecated", outputFilename, "-o", outputName, "-llegacy_stdio_definitions")
+	} else {
+		cmd = exec.Command("clang", "-Wno-deprecated", outputFilename, "-o", outputName)
+	}
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -72,17 +78,6 @@ func main() {
 	if err != nil {
 		fmt.Printf("Warning: Compilation with clang failed. You may need to install LLVM/Clang.\n")
 	} else {
-		fmt.Println("Compilation successful. Executable: output.exe")
-
-		// Run the compiled executable
-		fmt.Println("Running the compiled program...")
-		execCmd := exec.Command("./output.exe")
-		execCmd.Stdout = os.Stdout
-		execCmd.Stderr = os.Stderr
-
-		if err := execCmd.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error running executable: %v\n", err)
-			os.Exit(1)
-		}
+		fmt.Printf("Compilation successful. Executable: %s\n", outputName)
 	}
 }

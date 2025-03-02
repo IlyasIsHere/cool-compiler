@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -303,7 +304,11 @@ is_even(5):
 
 			// Try to compile the LLVM IR with clang
 			// This is a simple validation that the output is syntactically valid
-			output, err := exec.Command("clang", "-Wno-deprecated", tempFile, "-o", filepath.Join(os.TempDir(), "test_"+example.filename+".exe"), "-llegacy_stdio_definitions").CombinedOutput()
+			legacyFlag := ""
+			if runtime.GOOS == "windows" {
+				legacyFlag = "-llegacy_stdio_definitions"
+			}
+			output, err := exec.Command("clang", "-Wno-deprecated", tempFile, "-o", filepath.Join(os.TempDir(), "test_"+example.filename+".exe"), legacyFlag).CombinedOutput()
 
 			// Just check if clang accepted the LLVM IR - don't worry about successfully compiling
 			// as that would require the full runtime to be available
@@ -589,7 +594,11 @@ class Main {
 			defer os.Remove(tempExec)
 
 			// Compile the LLVM IR
-			output, err := exec.Command("clang", "-Wno-deprecated", tempFile, "-o", tempExec, "-llegacy_stdio_definitions").CombinedOutput()
+			legacyFlag := ""
+			if runtime.GOOS == "windows" {
+				legacyFlag = "-llegacy_stdio_definitions"
+			}
+			output, err := exec.Command("clang", "-Wno-deprecated", tempFile, "-o", tempExec, legacyFlag).CombinedOutput()
 			if err != nil {
 				t.Logf("Compilation warning/error: %s", output)
 				t.Logf("Skipping output verification due to compilation issues")

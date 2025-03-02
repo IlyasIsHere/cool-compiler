@@ -3,8 +3,7 @@
 %Int = type { i8* }
 %String = type { i8* }
 %Bool = type { i8* }
-%MutualRecursion = type { i8* }
-%Main = type { i8*, %IO* }
+%Main = type { i8* }
 
 @.str.empty = constant [1 x i8] c"\00"
 @vtable.Object = global [3 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
@@ -12,40 +11,20 @@
 @vtable.Int = global [3 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
 @vtable.String = global [6 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (i8* (%String*, i8*)* @String.concat to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i32 (%String*)* @String.length to i8*), i8* bitcast (i8* (%String*, i32, i32)* @String.substr to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
 @vtable.Bool = global [3 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
-@vtable.MutualRecursion = global [3 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
-@vtable.Main = global [10 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i8* (%Main*, i32)* @Main.get_indent to i8*), i8* bitcast (i1 (%Main*, i32)* @Main.is_even to i8*), i8* bitcast (i1 (%Main*, i32, i32)* @Main.is_even_trace to i8*), i8* bitcast (i1 (%Main*, i32)* @Main.is_odd to i8*), i8* bitcast (i1 (%Main*, i32, i32)* @Main.is_odd_trace to i8*), i8* bitcast (%Object* (%Main*)* @Main.main to i8*), i8* bitcast (%Object* (%Main*, i32)* @Main.test_number to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
-@.str8 = internal constant [45 x i8] c"Mutual Recursion Demo (Even/Odd functions)\0A\0A\00"
-@.str9 = internal constant [23 x i8] c"Testing even numbers:\0A\00"
-@.str10 = internal constant [23 x i8] c"\0ATesting odd numbers:\0A\00"
-@.str11 = internal constant [27 x i8] c"\0ATesting a larger number:\0A\00"
-@.str12 = internal constant [32 x i8] c"\0ARecursive trace for number 5:\0A\00"
-@.str13 = internal constant [13 x i8] c"is_even(5):\0A\00"
-@.str14 = internal constant [5 x i8] c" is \00"
-@.str15 = internal constant [5 x i8] c"even\00"
-@.str16 = internal constant [4 x i8] c"odd\00"
-@.str17 = internal constant [2 x i8] c"\0A\00"
-@.str18 = internal constant [9 x i8] c"is_even(\00"
-@.str19 = internal constant [3 x i8] c")\0A\00"
-@.str20 = internal constant [38 x i8] c"  return true (Base case: 0 is even)\0A\00"
-@.str21 = internal constant [38 x i8] c"  return false (Base case: 1 is odd)\0A\00"
-@.str22 = internal constant [17 x i8] c"  return is_odd(\00"
-@.str23 = internal constant [3 x i8] c")\0A\00"
-@.str24 = internal constant [11 x i8] c"  is_even(\00"
-@.str25 = internal constant [11 x i8] c") returns \00"
-@.str26 = internal constant [6 x i8] c"true\0A\00"
-@.str27 = internal constant [7 x i8] c"false\0A\00"
-@.str28 = internal constant [8 x i8] c"is_odd(\00"
-@.str29 = internal constant [3 x i8] c")\0A\00"
-@.str30 = internal constant [42 x i8] c"  return false (Base case: 0 is not odd)\0A\00"
-@.str31 = internal constant [37 x i8] c"  return true (Base case: 1 is odd)\0A\00"
-@.str32 = internal constant [18 x i8] c"  return is_even(\00"
-@.str33 = internal constant [3 x i8] c")\0A\00"
-@.str34 = internal constant [10 x i8] c"  is_odd(\00"
-@.str35 = internal constant [11 x i8] c") returns \00"
-@.str36 = internal constant [6 x i8] c"true\0A\00"
-@.str37 = internal constant [7 x i8] c"false\0A\00"
-@.str38 = internal constant [1 x i8] c"\00"
-@.str39 = internal constant [3 x i8] c"  \00"
+@vtable.Main = global [9 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i32 (%IO*)* @IO.in_int to i8*), i8* bitcast (i8* (%IO*)* @IO.in_string to i8*), i8* bitcast (i1 (%Main*, i32)* @Main.isPrime to i8*), i8* bitcast (%Object* (%Main*)* @Main.main to i8*), i8* bitcast (%IO* (%IO*, i32)* @IO.out_int to i8*), i8* bitcast (%IO* (%IO*, i8*)* @IO.out_string to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
+@.str7 = internal constant [26 x i8] c"Testing isPrime function\0A\00"
+@.str8 = internal constant [13 x i8] c"Is 2 prime? \00"
+@.str9 = internal constant [17 x i8] c"Yes, it's prime\0A\00"
+@.str10 = internal constant [20 x i8] c"No, it's not prime\0A\00"
+@.str11 = internal constant [13 x i8] c"Is 7 prime? \00"
+@.str12 = internal constant [17 x i8] c"Yes, it's prime\0A\00"
+@.str13 = internal constant [20 x i8] c"No, it's not prime\0A\00"
+@.str14 = internal constant [14 x i8] c"Is 10 prime? \00"
+@.str15 = internal constant [17 x i8] c"Yes, it's prime\0A\00"
+@.str16 = internal constant [20 x i8] c"No, it's not prime\0A\00"
+@.str17 = internal constant [14 x i8] c"Is 17 prime? \00"
+@.str18 = internal constant [17 x i8] c"Yes, it's prime\0A\00"
+@.str19 = internal constant [20 x i8] c"No, it's not prime\0A\00"
 @.str.Object = constant [7 x i8] c"Object\00"
 @.str.fmt = global [3 x i8] c"%s\00"
 @.str.fmt.int = constant [3 x i8] c"%d\00"
@@ -119,7 +98,7 @@ raw_string:
 	ret i32 %5
 
 struct_string:
-	%6 = getelementptr { i8*, i8* }, %String* %self, i32 0, i32 1
+	%6 = bitcast %String* %self to i8**
 	%7 = load i8*, i8** %6
 	%8 = call i32 @strlen(i8* %7)
 	ret i32 %8
@@ -146,7 +125,7 @@ raw_string:
 	ret i8* %10
 
 struct_string:
-	%13 = getelementptr { i8*, i8* }, %String* %self, i32 0, i32 1
+	%13 = bitcast %String* %self to i8**
 	%14 = load i8*, i8** %13
 	%15 = call i32 @strlen(i8* %14)
 	%16 = call i32 @strlen(i8* %s)
@@ -173,7 +152,7 @@ raw_string:
 	br label %bounds_check_raw
 
 struct_string:
-	%6 = getelementptr { i8*, i8* }, %String* %self, i32 0, i32 1
+	%6 = bitcast %String* %self to i8**
 	%7 = load i8*, i8** %6
 	%8 = call i32 @strlen(i8* %7)
 	br label %bounds_check_struct
@@ -239,403 +218,221 @@ declare i8* @strcat(i8* %dest, i8* %src)
 
 declare i8* @strncpy(i8* %dest, i8* %src, i32 %n)
 
-define %Object* @Main.main(%Main* %self) {
+define i1 @Main.isPrime(%Main* %self, i32 %n) {
 entry:
-	%0 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%1 = load %IO*, %IO** %0
-	%2 = call %IO* @IO.out_string(%IO* %1, i8* getelementptr ([45 x i8], [45 x i8]* @.str8, i32 0, i32 0))
-	%3 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%4 = load %IO*, %IO** %3
-	%5 = call %IO* @IO.out_string(%IO* %4, i8* getelementptr ([23 x i8], [23 x i8]* @.str9, i32 0, i32 0))
-	%6 = call %Object* @Main.test_number(%Main* %self, i32 0)
-	%7 = call %Object* @Main.test_number(%Main* %self, i32 2)
-	%8 = call %Object* @Main.test_number(%Main* %self, i32 4)
-	%9 = call %Object* @Main.test_number(%Main* %self, i32 6)
-	%10 = call %Object* @Main.test_number(%Main* %self, i32 10)
-	%11 = call %Object* @Main.test_number(%Main* %self, i32 20)
-	%12 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%13 = load %IO*, %IO** %12
-	%14 = call %IO* @IO.out_string(%IO* %13, i8* getelementptr ([23 x i8], [23 x i8]* @.str10, i32 0, i32 0))
-	%15 = call %Object* @Main.test_number(%Main* %self, i32 1)
-	%16 = call %Object* @Main.test_number(%Main* %self, i32 3)
-	%17 = call %Object* @Main.test_number(%Main* %self, i32 5)
-	%18 = call %Object* @Main.test_number(%Main* %self, i32 7)
-	%19 = call %Object* @Main.test_number(%Main* %self, i32 11)
-	%20 = call %Object* @Main.test_number(%Main* %self, i32 21)
-	%21 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%22 = load %IO*, %IO** %21
-	%23 = call %IO* @IO.out_string(%IO* %22, i8* getelementptr ([27 x i8], [27 x i8]* @.str11, i32 0, i32 0))
-	%24 = call %Object* @Main.test_number(%Main* %self, i32 42)
-	%25 = call %Object* @Main.test_number(%Main* %self, i32 99)
-	%26 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%27 = load %IO*, %IO** %26
-	%28 = call %IO* @IO.out_string(%IO* %27, i8* getelementptr ([32 x i8], [32 x i8]* @.str12, i32 0, i32 0))
-	%29 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%30 = load %IO*, %IO** %29
-	%31 = call %IO* @IO.out_string(%IO* %30, i8* getelementptr ([13 x i8], [13 x i8]* @.str13, i32 0, i32 0))
-	%32 = call i1 @Main.is_even_trace(%Main* %self, i32 5, i32 1)
-	%33 = inttoptr i1 %32 to %Object*
-	ret %Object* %33
-}
-
-define %Object* @Main.test_number(%Main* %self, i32 %n) {
-entry:
-	%0 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%1 = load %IO*, %IO** %0
-	%2 = call %IO* @IO.out_int(%IO* %1, i32 %n)
-	%3 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%4 = load %IO*, %IO** %3
-	%5 = call %IO* @IO.out_string(%IO* %4, i8* getelementptr ([5 x i8], [5 x i8]* @.str14, i32 0, i32 0))
-	%6 = call i1 @Main.is_even(%Main* %self, i32 %n)
-	br i1 %6, label %if.then.1, label %if.else.1
+	%0 = alloca i32
+	store i32 2, i32* %0
+	%1 = alloca i1
+	store i1 true, i1* %1
+	%2 = icmp sle i32 %n, 1
+	br i1 %2, label %if.then.1, label %if.else.1
 
 if.then.1:
-	%7 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%8 = load %IO*, %IO** %7
-	%9 = call %IO* @IO.out_string(%IO* %8, i8* getelementptr ([5 x i8], [5 x i8]* @.str15, i32 0, i32 0))
+	store i1 false, i1* %1
+	%3 = inttoptr i1 false to i8*
 	br label %if.end.1
 
 if.else.1:
-	%10 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%11 = load %IO*, %IO** %10
-	%12 = call %IO* @IO.out_string(%IO* %11, i8* getelementptr ([4 x i8], [4 x i8]* @.str16, i32 0, i32 0))
-	br label %if.end.1
+	%4 = icmp eq i32 %n, 2
+	br i1 %4, label %if.then.2, label %if.else.2
 
 if.end.1:
-	%13 = phi %IO* [ %8, %if.then.1 ], [ %11, %if.else.1 ]
-	%14 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%15 = load %IO*, %IO** %14
-	%16 = call %IO* @IO.out_string(%IO* %15, i8* getelementptr ([2 x i8], [2 x i8]* @.str17, i32 0, i32 0))
-	%17 = bitcast %IO* %15 to %Object*
-	ret %Object* %17
-}
-
-define i1 @Main.is_even(%Main* %self, i32 %n) {
-entry:
-	%0 = icmp eq i32 %n, 0
-	br i1 %0, label %if.then.2, label %if.else.2
+	%5 = phi i8* [ %3, %if.then.1 ], [ %8, %if.end.2 ]
+	%6 = load i1, i1* %1
+	ret i1 %6
 
 if.then.2:
+	store i1 true, i1* %1
+	%7 = inttoptr i1 true to i8*
 	br label %if.end.2
 
 if.else.2:
-	%1 = icmp eq i32 %n, 1
-	br i1 %1, label %if.then.3, label %if.else.3
+	br label %while.cond.1
 
 if.end.2:
-	%2 = phi i1 [ true, %if.then.2 ], [ %5, %if.end.3 ]
-	ret i1 %2
+	%8 = phi i8* [ %7, %if.then.2 ], [ null, %while.exit.1 ]
+	br label %if.end.1
+
+while.cond.1:
+	%9 = load i32, i32* %0
+	%10 = load i32, i32* %0
+	%11 = mul i32 %9, %10
+	%12 = icmp sle i32 %11, %n
+	br i1 %12, label %while.body.1, label %while.exit.1
+
+while.body.1:
+	%13 = load i32, i32* %0
+	%14 = sdiv i32 %n, %13
+	%15 = load i32, i32* %0
+	%16 = mul i32 %14, %15
+	%17 = sub i32 %n, %16
+	%18 = icmp eq i32 %17, 0
+	br i1 %18, label %if.then.3, label %if.else.3
+
+while.exit.1:
+	br label %if.end.2
 
 if.then.3:
+	store i1 false, i1* %1
+	store i32 %n, i32* %0
 	br label %if.end.3
 
 if.else.3:
-	%3 = sub i32 %n, 1
-	%4 = call i1 @Main.is_odd(%Main* %self, i32 %3)
+	%19 = load i32, i32* %0
+	%20 = add i32 %19, 1
+	store i32 %20, i32* %0
 	br label %if.end.3
 
 if.end.3:
-	%5 = phi i1 [ false, %if.then.3 ], [ %4, %if.else.3 ]
-	br label %if.end.2
+	%21 = phi i32 [ %n, %if.then.3 ], [ %20, %if.else.3 ]
+	br label %while.cond.1
 }
 
-define i1 @Main.is_odd(%Main* %self, i32 %n) {
+define %Object* @Main.main(%Main* %self) {
 entry:
-	%0 = icmp eq i32 %n, 0
-	br i1 %0, label %if.then.4, label %if.else.4
+	%0 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%1 = load i8*, i8** %0
+	%2 = bitcast i8* %1 to %Object* (%IO*, i8*)*
+	%3 = bitcast %Main* %self to %IO*
+	%4 = call %Object* %2(%IO* %3, i8* getelementptr ([26 x i8], [26 x i8]* @.str7, i32 0, i32 0))
+	%5 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%6 = load i8*, i8** %5
+	%7 = bitcast i8* %6 to %Object* (%IO*, i8*)*
+	%8 = bitcast %Main* %self to %IO*
+	%9 = call %Object* %7(%IO* %8, i8* getelementptr ([13 x i8], [13 x i8]* @.str8, i32 0, i32 0))
+	%10 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 4
+	%11 = load i8*, i8** %10
+	%12 = bitcast i8* %11 to i1 (%Main*, i32)*
+	%13 = bitcast %Main* %self to %Main*
+	%14 = call i1 %12(%Main* %13, i32 2)
+	br i1 %14, label %if.then.4, label %if.else.4
 
 if.then.4:
+	%15 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%16 = load i8*, i8** %15
+	%17 = bitcast i8* %16 to %Object* (%IO*, i8*)*
+	%18 = bitcast %Main* %self to %IO*
+	%19 = call %Object* %17(%IO* %18, i8* getelementptr ([17 x i8], [17 x i8]* @.str9, i32 0, i32 0))
 	br label %if.end.4
 
 if.else.4:
-	%1 = icmp eq i32 %n, 1
-	br i1 %1, label %if.then.5, label %if.else.5
+	%20 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%21 = load i8*, i8** %20
+	%22 = bitcast i8* %21 to %Object* (%IO*, i8*)*
+	%23 = bitcast %Main* %self to %IO*
+	%24 = call %Object* %22(%IO* %23, i8* getelementptr ([20 x i8], [20 x i8]* @.str10, i32 0, i32 0))
+	br label %if.end.4
 
 if.end.4:
-	%2 = phi i1 [ false, %if.then.4 ], [ %5, %if.end.5 ]
-	ret i1 %2
+	%25 = phi %Object* [ %19, %if.then.4 ], [ %24, %if.else.4 ]
+	%26 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%27 = load i8*, i8** %26
+	%28 = bitcast i8* %27 to %Object* (%IO*, i8*)*
+	%29 = bitcast %Main* %self to %IO*
+	%30 = call %Object* %28(%IO* %29, i8* getelementptr ([13 x i8], [13 x i8]* @.str11, i32 0, i32 0))
+	%31 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 4
+	%32 = load i8*, i8** %31
+	%33 = bitcast i8* %32 to i1 (%Main*, i32)*
+	%34 = bitcast %Main* %self to %Main*
+	%35 = call i1 %33(%Main* %34, i32 7)
+	br i1 %35, label %if.then.5, label %if.else.5
 
 if.then.5:
+	%36 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%37 = load i8*, i8** %36
+	%38 = bitcast i8* %37 to %Object* (%IO*, i8*)*
+	%39 = bitcast %Main* %self to %IO*
+	%40 = call %Object* %38(%IO* %39, i8* getelementptr ([17 x i8], [17 x i8]* @.str12, i32 0, i32 0))
 	br label %if.end.5
 
 if.else.5:
-	%3 = sub i32 %n, 1
-	%4 = call i1 @Main.is_even(%Main* %self, i32 %3)
+	%41 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%42 = load i8*, i8** %41
+	%43 = bitcast i8* %42 to %Object* (%IO*, i8*)*
+	%44 = bitcast %Main* %self to %IO*
+	%45 = call %Object* %43(%IO* %44, i8* getelementptr ([20 x i8], [20 x i8]* @.str13, i32 0, i32 0))
 	br label %if.end.5
 
 if.end.5:
-	%5 = phi i1 [ true, %if.then.5 ], [ %4, %if.else.5 ]
-	br label %if.end.4
-}
-
-define i1 @Main.is_even_trace(%Main* %self, i32 %n, i32 %level) {
-entry:
-	%0 = alloca i8*
-	%1 = call i8* @Main.get_indent(%Main* %self, i32 %level)
-	store i8* %1, i8** %0
-	%2 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%3 = load %IO*, %IO** %2
-	%4 = load i8*, i8** %0
-	%5 = call %IO* @IO.out_string(%IO* %3, i8* %4)
-	%6 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%7 = load %IO*, %IO** %6
-	%8 = call %IO* @IO.out_string(%IO* %7, i8* getelementptr ([9 x i8], [9 x i8]* @.str18, i32 0, i32 0))
-	%9 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%10 = load %IO*, %IO** %9
-	%11 = call %IO* @IO.out_int(%IO* %10, i32 %n)
-	%12 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%13 = load %IO*, %IO** %12
-	%14 = call %IO* @IO.out_string(%IO* %13, i8* getelementptr ([3 x i8], [3 x i8]* @.str19, i32 0, i32 0))
-	%15 = icmp eq i32 %n, 0
-	br i1 %15, label %if.then.6, label %if.else.6
+	%46 = phi %Object* [ %40, %if.then.5 ], [ %45, %if.else.5 ]
+	%47 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%48 = load i8*, i8** %47
+	%49 = bitcast i8* %48 to %Object* (%IO*, i8*)*
+	%50 = bitcast %Main* %self to %IO*
+	%51 = call %Object* %49(%IO* %50, i8* getelementptr ([14 x i8], [14 x i8]* @.str14, i32 0, i32 0))
+	%52 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 4
+	%53 = load i8*, i8** %52
+	%54 = bitcast i8* %53 to i1 (%Main*, i32)*
+	%55 = bitcast %Main* %self to %Main*
+	%56 = call i1 %54(%Main* %55, i32 10)
+	br i1 %56, label %if.then.6, label %if.else.6
 
 if.then.6:
-	%16 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%17 = load %IO*, %IO** %16
-	%18 = load i8*, i8** %0
-	%19 = call %IO* @IO.out_string(%IO* %17, i8* %18)
-	%20 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%21 = load %IO*, %IO** %20
-	%22 = call %IO* @IO.out_string(%IO* %21, i8* getelementptr ([38 x i8], [38 x i8]* @.str20, i32 0, i32 0))
+	%57 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%58 = load i8*, i8** %57
+	%59 = bitcast i8* %58 to %Object* (%IO*, i8*)*
+	%60 = bitcast %Main* %self to %IO*
+	%61 = call %Object* %59(%IO* %60, i8* getelementptr ([17 x i8], [17 x i8]* @.str15, i32 0, i32 0))
 	br label %if.end.6
 
 if.else.6:
-	%23 = icmp eq i32 %n, 1
-	br i1 %23, label %if.then.7, label %if.else.7
+	%62 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%63 = load i8*, i8** %62
+	%64 = bitcast i8* %63 to %Object* (%IO*, i8*)*
+	%65 = bitcast %Main* %self to %IO*
+	%66 = call %Object* %64(%IO* %65, i8* getelementptr ([20 x i8], [20 x i8]* @.str16, i32 0, i32 0))
+	br label %if.end.6
 
 if.end.6:
-	%24 = phi i1 [ true, %if.then.6 ], [ %64, %if.end.7 ]
-	ret i1 %24
+	%67 = phi %Object* [ %61, %if.then.6 ], [ %66, %if.else.6 ]
+	%68 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%69 = load i8*, i8** %68
+	%70 = bitcast i8* %69 to %Object* (%IO*, i8*)*
+	%71 = bitcast %Main* %self to %IO*
+	%72 = call %Object* %70(%IO* %71, i8* getelementptr ([14 x i8], [14 x i8]* @.str17, i32 0, i32 0))
+	%73 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 4
+	%74 = load i8*, i8** %73
+	%75 = bitcast i8* %74 to i1 (%Main*, i32)*
+	%76 = bitcast %Main* %self to %Main*
+	%77 = call i1 %75(%Main* %76, i32 17)
+	br i1 %77, label %if.then.7, label %if.else.7
 
 if.then.7:
-	%25 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%26 = load %IO*, %IO** %25
-	%27 = load i8*, i8** %0
-	%28 = call %IO* @IO.out_string(%IO* %26, i8* %27)
-	%29 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%30 = load %IO*, %IO** %29
-	%31 = call %IO* @IO.out_string(%IO* %30, i8* getelementptr ([38 x i8], [38 x i8]* @.str21, i32 0, i32 0))
+	%78 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%79 = load i8*, i8** %78
+	%80 = bitcast i8* %79 to %Object* (%IO*, i8*)*
+	%81 = bitcast %Main* %self to %IO*
+	%82 = call %Object* %80(%IO* %81, i8* getelementptr ([17 x i8], [17 x i8]* @.str18, i32 0, i32 0))
 	br label %if.end.7
 
 if.else.7:
-	%32 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%33 = load %IO*, %IO** %32
-	%34 = load i8*, i8** %0
-	%35 = call %IO* @IO.out_string(%IO* %33, i8* %34)
-	%36 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%37 = load %IO*, %IO** %36
-	%38 = call %IO* @IO.out_string(%IO* %37, i8* getelementptr ([17 x i8], [17 x i8]* @.str22, i32 0, i32 0))
-	%39 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%40 = load %IO*, %IO** %39
-	%41 = sub i32 %n, 1
-	%42 = call %IO* @IO.out_int(%IO* %40, i32 %41)
-	%43 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%44 = load %IO*, %IO** %43
-	%45 = call %IO* @IO.out_string(%IO* %44, i8* getelementptr ([3 x i8], [3 x i8]* @.str23, i32 0, i32 0))
-	%46 = alloca i1
-	%47 = sub i32 %n, 1
-	%48 = add i32 %level, 1
-	%49 = call i1 @Main.is_odd_trace(%Main* %self, i32 %47, i32 %48)
-	store i1 %49, i1* %46
-	%50 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%51 = load %IO*, %IO** %50
-	%52 = load i8*, i8** %0
-	%53 = call %IO* @IO.out_string(%IO* %51, i8* %52)
-	%54 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%55 = load %IO*, %IO** %54
-	%56 = call %IO* @IO.out_string(%IO* %55, i8* getelementptr ([11 x i8], [11 x i8]* @.str24, i32 0, i32 0))
-	%57 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%58 = load %IO*, %IO** %57
-	%59 = call %IO* @IO.out_int(%IO* %58, i32 %n)
-	%60 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%61 = load %IO*, %IO** %60
-	%62 = call %IO* @IO.out_string(%IO* %61, i8* getelementptr ([11 x i8], [11 x i8]* @.str25, i32 0, i32 0))
-	%63 = load i1, i1* %46
-	br i1 %63, label %if.then.8, label %if.else.8
+	%83 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 7
+	%84 = load i8*, i8** %83
+	%85 = bitcast i8* %84 to %Object* (%IO*, i8*)*
+	%86 = bitcast %Main* %self to %IO*
+	%87 = call %Object* %85(%IO* %86, i8* getelementptr ([20 x i8], [20 x i8]* @.str19, i32 0, i32 0))
+	br label %if.end.7
 
 if.end.7:
-	%64 = phi i1 [ false, %if.then.7 ], [ %72, %if.end.8 ]
-	br label %if.end.6
-
-if.then.8:
-	%65 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%66 = load %IO*, %IO** %65
-	%67 = call %IO* @IO.out_string(%IO* %66, i8* getelementptr ([6 x i8], [6 x i8]* @.str26, i32 0, i32 0))
-	br label %if.end.8
-
-if.else.8:
-	%68 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%69 = load %IO*, %IO** %68
-	%70 = call %IO* @IO.out_string(%IO* %69, i8* getelementptr ([7 x i8], [7 x i8]* @.str27, i32 0, i32 0))
-	br label %if.end.8
-
-if.end.8:
-	%71 = phi %IO* [ %66, %if.then.8 ], [ %69, %if.else.8 ]
-	%72 = load i1, i1* %46
-	br label %if.end.7
-}
-
-define i1 @Main.is_odd_trace(%Main* %self, i32 %n, i32 %level) {
-entry:
-	%0 = alloca i8*
-	%1 = call i8* @Main.get_indent(%Main* %self, i32 %level)
-	store i8* %1, i8** %0
-	%2 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%3 = load %IO*, %IO** %2
-	%4 = load i8*, i8** %0
-	%5 = call %IO* @IO.out_string(%IO* %3, i8* %4)
-	%6 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%7 = load %IO*, %IO** %6
-	%8 = call %IO* @IO.out_string(%IO* %7, i8* getelementptr ([8 x i8], [8 x i8]* @.str28, i32 0, i32 0))
-	%9 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%10 = load %IO*, %IO** %9
-	%11 = call %IO* @IO.out_int(%IO* %10, i32 %n)
-	%12 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%13 = load %IO*, %IO** %12
-	%14 = call %IO* @IO.out_string(%IO* %13, i8* getelementptr ([3 x i8], [3 x i8]* @.str29, i32 0, i32 0))
-	%15 = icmp eq i32 %n, 0
-	br i1 %15, label %if.then.9, label %if.else.9
-
-if.then.9:
-	%16 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%17 = load %IO*, %IO** %16
-	%18 = load i8*, i8** %0
-	%19 = call %IO* @IO.out_string(%IO* %17, i8* %18)
-	%20 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%21 = load %IO*, %IO** %20
-	%22 = call %IO* @IO.out_string(%IO* %21, i8* getelementptr ([42 x i8], [42 x i8]* @.str30, i32 0, i32 0))
-	br label %if.end.9
-
-if.else.9:
-	%23 = icmp eq i32 %n, 1
-	br i1 %23, label %if.then.10, label %if.else.10
-
-if.end.9:
-	%24 = phi i1 [ false, %if.then.9 ], [ %64, %if.end.10 ]
-	ret i1 %24
-
-if.then.10:
-	%25 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%26 = load %IO*, %IO** %25
-	%27 = load i8*, i8** %0
-	%28 = call %IO* @IO.out_string(%IO* %26, i8* %27)
-	%29 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%30 = load %IO*, %IO** %29
-	%31 = call %IO* @IO.out_string(%IO* %30, i8* getelementptr ([37 x i8], [37 x i8]* @.str31, i32 0, i32 0))
-	br label %if.end.10
-
-if.else.10:
-	%32 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%33 = load %IO*, %IO** %32
-	%34 = load i8*, i8** %0
-	%35 = call %IO* @IO.out_string(%IO* %33, i8* %34)
-	%36 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%37 = load %IO*, %IO** %36
-	%38 = call %IO* @IO.out_string(%IO* %37, i8* getelementptr ([18 x i8], [18 x i8]* @.str32, i32 0, i32 0))
-	%39 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%40 = load %IO*, %IO** %39
-	%41 = sub i32 %n, 1
-	%42 = call %IO* @IO.out_int(%IO* %40, i32 %41)
-	%43 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%44 = load %IO*, %IO** %43
-	%45 = call %IO* @IO.out_string(%IO* %44, i8* getelementptr ([3 x i8], [3 x i8]* @.str33, i32 0, i32 0))
-	%46 = alloca i1
-	%47 = sub i32 %n, 1
-	%48 = add i32 %level, 1
-	%49 = call i1 @Main.is_even_trace(%Main* %self, i32 %47, i32 %48)
-	store i1 %49, i1* %46
-	%50 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%51 = load %IO*, %IO** %50
-	%52 = load i8*, i8** %0
-	%53 = call %IO* @IO.out_string(%IO* %51, i8* %52)
-	%54 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%55 = load %IO*, %IO** %54
-	%56 = call %IO* @IO.out_string(%IO* %55, i8* getelementptr ([10 x i8], [10 x i8]* @.str34, i32 0, i32 0))
-	%57 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%58 = load %IO*, %IO** %57
-	%59 = call %IO* @IO.out_int(%IO* %58, i32 %n)
-	%60 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%61 = load %IO*, %IO** %60
-	%62 = call %IO* @IO.out_string(%IO* %61, i8* getelementptr ([11 x i8], [11 x i8]* @.str35, i32 0, i32 0))
-	%63 = load i1, i1* %46
-	br i1 %63, label %if.then.11, label %if.else.11
-
-if.end.10:
-	%64 = phi i1 [ true, %if.then.10 ], [ %72, %if.end.11 ]
-	br label %if.end.9
-
-if.then.11:
-	%65 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%66 = load %IO*, %IO** %65
-	%67 = call %IO* @IO.out_string(%IO* %66, i8* getelementptr ([6 x i8], [6 x i8]* @.str36, i32 0, i32 0))
-	br label %if.end.11
-
-if.else.11:
-	%68 = getelementptr %Main, %Main* %self, i32 0, i32 1
-	%69 = load %IO*, %IO** %68
-	%70 = call %IO* @IO.out_string(%IO* %69, i8* getelementptr ([7 x i8], [7 x i8]* @.str37, i32 0, i32 0))
-	br label %if.end.11
-
-if.end.11:
-	%71 = phi %IO* [ %66, %if.then.11 ], [ %69, %if.else.11 ]
-	%72 = load i1, i1* %46
-	br label %if.end.10
-}
-
-define i8* @Main.get_indent(%Main* %self, i32 %level) {
-entry:
-	%0 = alloca i8*
-	store i8* getelementptr ([1 x i8], [1 x i8]* @.str38, i32 0, i32 0), i8** %0
-	%1 = alloca i32
-	store i32 0, i32* %1
-	br label %while.cond.1
-
-while.cond.1:
-	%2 = load i32, i32* %1
-	%3 = icmp slt i32 %2, %level
-	br i1 %3, label %while.body.1, label %while.exit.1
-
-while.body.1:
-	%4 = load i8*, i8** %0
-	%5 = call i8* @String.concat(i8* %4, i8* getelementptr ([3 x i8], [3 x i8]* @.str39, i32 0, i32 0))
-	store i8* %5, i8** %0
-	%6 = load i32, i32* %1
-	%7 = add i32 %6, 1
-	store i32 %7, i32* %1
-	br label %while.cond.1
-
-while.exit.1:
-	%8 = load i8*, i8** %0
-	%9 = bitcast i8* %8 to i8*
-	ret i8* %9
+	%88 = phi %Object* [ %82, %if.then.7 ], [ %87, %if.else.7 ]
+	%89 = bitcast %Object* %88 to %Object*
+	ret %Object* %89
 }
 
 define i32 @main() {
 entry:
-	%0 = call i8* @malloc(%Main* getelementptr (%Main, %Main* null, i32 1))
-	%1 = bitcast i8* %0 to %Main*
-	%2 = getelementptr %Main, %Main* %1, i32 0, i32 0
-	%3 = bitcast [10 x i8*]* @vtable.Main to i8*
-	store i8* %3, i8** %2
-	%4 = getelementptr %Main, %Main* %1, i32 0, i32 1
-	%5 = call i8* @malloc(%IO* getelementptr (%IO, %IO* null, i32 1))
-	%6 = bitcast i8* %5 to %IO*
-	%7 = getelementptr %IO, %IO* %6, i32 0, i32 0
-	%8 = bitcast [7 x i8*]* @vtable.IO to i8*
-	store i8* %8, i8** %7
-	store %IO* %6, %IO** %4
-	%9 = alloca %Main*
-	store %Main* %1, %Main** %9
-	%10 = getelementptr %Main, %Main* %1, i32 0, i32 1
-	%11 = call i8* @malloc(%IO* getelementptr (%IO, %IO* null, i32 1))
-	%12 = bitcast i8* %11 to %IO*
-	%13 = getelementptr %IO, %IO* %12, i32 0, i32 0
-	%14 = bitcast [7 x i8*]* @vtable.IO to i8*
-	store i8* %14, i8** %13
-	store %IO* %12, %IO** %10
-	%15 = getelementptr [10 x i8*], [10 x i8*]* @vtable.Main, i32 0, i32 7
-	%16 = load i8*, i8** %15
-	%17 = bitcast i8* %16 to i8* (%Main*)*
-	%18 = call i8* %17(%Main* %1)
+	%0 = getelementptr %Main, %Main* null, i32 1
+	%1 = ptrtoint %Main* %0 to i64
+	%2 = call i8* @malloc(i64 %1)
+	%3 = bitcast i8* %2 to %Main*
+	%4 = getelementptr %Main, %Main* %3, i32 0, i32 0
+	%5 = bitcast [9 x i8*]* @vtable.Main to i8*
+	store i8* %5, i8** %4
+	%6 = alloca %Main*
+	store %Main* %3, %Main** %6
+	%7 = getelementptr [9 x i8*], [9 x i8*]* @vtable.Main, i32 0, i32 5
+	%8 = load i8*, i8** %7
+	%9 = bitcast i8* %8 to i8* (%Main*)*
+	%10 = call i8* %9(%Main* %3)
 	ret i32 0
 }

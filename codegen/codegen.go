@@ -12,6 +12,13 @@ import (
 	"github.com/llir/llvm/ir/value"
 )
 
+// CaseResult represents the result of a case expression,
+// including the value and the COOL types of each branch
+type CaseResult struct {
+	Value       value.Value // The actual LLVM value (PHI node result)
+	BranchTypes []string    // The COOL types of each branch
+}
+
 // CodeGenerator handles the code generation process
 type CodeGenerator struct {
 	// Module represents the LLVM module being built
@@ -59,6 +66,9 @@ type CodeGenerator struct {
 
 	// Common constants
 	EmptyStringGlobal *ir.Global
+
+	// CaseResults stores the results of case expressions for later retrieval
+	CaseResults map[value.Value]*CaseResult
 }
 
 // Generate is the main entry point for code generation
@@ -677,32 +687,34 @@ func (cg *CodeGenerator) generateMethod(class *ast.Class, method *ast.Method) {
 		return
 	}
 
-	// The method body should compute a value of the correct return type
-	if bodyValue.Type() != methodFunc.Sig.RetType {
-		// If types don't match, we may need to cast or handle special cases
-		if ptr, isPtrType := methodFunc.Sig.RetType.(*types.PointerType); isPtrType {
-			if bodyValue.Type() == types.I32 || bodyValue.Type() == types.I1 {
-				// Boxing primitive values when returning as Object
-				// In a real implementation, would create proper boxed objects
-				bodyValue = cg.CurrentBlock.NewIntToPtr(bodyValue, ptr)
-			} else if bodyValue.Type() == types.Void {
-				// Handle void return values when pointer expected (common with IO operations)
-				// Return 'self' as a sensible default
-				bodyValue = cg.CurrentBlock.NewBitCast(selfParam, ptr)
-			} else if _, isOtherPtr := bodyValue.Type().(*types.PointerType); isOtherPtr {
-				// Cast between pointer types
-				bodyValue = cg.CurrentBlock.NewBitCast(bodyValue, ptr)
+	// Convert the bodyValue to the correct return type if needed
+	returnType := cg.getLLVMTypeForCOOLTypeWithContext(method.TypeDecl.Value, className)
+
+	// Check if we need to convert from primitive type to object pointer
+	// For example, converting from i1 (boolean) to %Object*
+	_, bodyIsPtr := bodyValue.Type().(*types.PointerType)
+	_, returnIsPtr := returnType.(*types.PointerType)
+
+	if bodyValue.Type() != returnType {
+		// Special handling for primitive to pointer conversion
+		if !bodyIsPtr && returnIsPtr {
+			// Handle primitive to pointer conversion
+			if bodyValue.Type() == types.I1 || bodyValue.Type() == types.I32 {
+				// First convert primitive to i8* with inttoptr
+				tmpPtr := cg.CurrentBlock.NewIntToPtr(bodyValue, types.NewPointer(types.I8))
+				// Then bitcast to the target type
+				bodyValue = cg.CurrentBlock.NewBitCast(tmpPtr, returnType)
+			} else {
+				// Use ensureCorrectArgumentType for other conversions
+				bodyValue = cg.ensureCorrectArgumentType(bodyValue, returnType)
 			}
-		} else if methodFunc.Sig.RetType == types.Void && bodyValue.Type() != types.Void {
-			// If we need to return void but have a value, just ignore the value
-			cg.CurrentBlock.NewRet(nil)
-			return
 		} else {
-			// added this to handle the case where the return type is not a pointer
-			bodyValue = cg.CurrentBlock.NewBitCast(bodyValue, methodFunc.Sig.RetType)
+			// Standard bitcast for pointer-to-pointer conversion
+			bodyValue = cg.CurrentBlock.NewBitCast(bodyValue, returnType)
 		}
 	}
 
+	// Return the computed value
 	cg.CurrentBlock.NewRet(bodyValue)
 }
 
@@ -781,6 +793,18 @@ func (cg *CodeGenerator) generateBooleanLiteral(boolLit *ast.BooleanLiteral) val
 	return constant.NewInt(types.I1, boolVal)
 }
 
+// Helper function to calculate size of a type for malloc
+func (cg *CodeGenerator) getSizeOf(typ types.Type, block *ir.Block) value.Value {
+	// Create a null pointer of the given type
+	nullPtr := constant.NewNull(types.NewPointer(typ))
+
+	// Get a pointer to the next element (this gives us the size)
+	gep := block.NewGetElementPtr(typ, nullPtr, constant.NewInt(types.I32, 1))
+
+	// Convert this pointer to an integer to get the size in bytes
+	return block.NewPtrToInt(gep, types.I64)
+}
+
 // generateObjectAllocation creates a new instance of a class
 func (cg *CodeGenerator) generateObjectAllocation(typeName string) value.Value {
 	// Get the current block
@@ -792,12 +816,8 @@ func (cg *CodeGenerator) generateObjectAllocation(typeName string) value.Value {
 		panic(fmt.Sprintf("attempt to create an instance of unknown type: %s", typeName))
 	}
 
-	// Calculate the size of the class struct using getelementptr
-	sizeGEP := constant.NewGetElementPtr(
-		classType,
-		constant.NewNull(types.NewPointer(classType)),
-		constant.NewInt(types.I32, 1),
-	)
+	// Calculate the size of the class struct
+	sizeValue := cg.getSizeOf(classType, block)
 
 	// Call malloc with the size of the class
 	mallocFunc, exists := cg.StdlibFuncs["malloc"]
@@ -806,7 +826,7 @@ func (cg *CodeGenerator) generateObjectAllocation(typeName string) value.Value {
 	}
 
 	// malloc returns i8* which we'll cast to the appropriate type
-	mallocCall := block.NewCall(mallocFunc, sizeGEP)
+	mallocCall := block.NewCall(mallocFunc, sizeValue)
 
 	// Cast the i8* to the class pointer type
 	objectPtr := block.NewBitCast(mallocCall, types.NewPointer(classType))
@@ -898,27 +918,23 @@ func (cg *CodeGenerator) initializeAttributes(className string, objectPtr value.
 					// Generate the init expression if it exists
 					initValue = cg.generateExpression(attr.Expression)
 				} else {
-					// Apply default initialization based on type
+					// If there's no initialization, use a default value based on the type
 					switch attr.TypeDecl.Value {
 					case "Int":
 						initValue = constant.NewInt(types.I32, 0)
 					case "Bool":
 						initValue = constant.NewInt(types.I1, 0)
 					case "String":
-						// Use the pre-defined empty string global instead of creating a new one
-						initValue = constant.NewGetElementPtr(
-							cg.EmptyStringGlobal.ContentType,
-							cg.EmptyStringGlobal,
-							constant.NewInt(types.I32, 0),
-							constant.NewInt(types.I32, 0),
-						)
+						initValue = cg.EmptyStringGlobal
 					default:
-						// All other classes default to void (null)
-						if otherClassType, exists := cg.TypeMap[attr.TypeDecl.Value]; exists {
-							initValue = constant.NewNull(types.NewPointer(otherClassType))
+						// For objects, use null (nil pointer)
+						objType := cg.getLLVMTypeForCOOLType(attr.TypeDecl.Value)
+						// Check if it's a pointer type before calling NewNull
+						if ptrType, ok := objType.(*types.PointerType); ok {
+							initValue = constant.NewNull(ptrType)
 						} else {
-							// If type doesn't exist, use generic null pointer
-							initValue = constant.NewNull(types.NewPointer(types.I8))
+							// If not a pointer type, use a zero value appropriate for the type
+							initValue = constant.NewZeroInitializer(objType)
 						}
 					}
 				}
@@ -990,83 +1006,208 @@ func (cg *CodeGenerator) getObjectRuntimeType(object value.Value) string {
 func (cg *CodeGenerator) generateDynamicDispatch(object value.Value, methodName string, args []value.Value) value.Value {
 	block := cg.CurrentBlock
 
-	// First, we need to load the vtable pointer from the object
-	// In our implementation, the vtable pointer is always the first field of any object
+	// Get the actual type of the object
+	runtimeType := cg.getObjectRuntimeType(object)
 
-	// Get the object's type
-	objPtrType, ok := object.Type().(*types.PointerType)
-	if !ok {
-		panic(fmt.Sprintf("expected object to be a pointer type, got: %v", object.Type()))
+	// Get the vtable for this type
+	vtable, exists := cg.VTables[runtimeType]
+	if !exists {
+		panic(fmt.Sprintf("vtable not found for type: %s", runtimeType))
 	}
 
-	// Check if we need to bitcast the object pointer
-	if _, ok := objPtrType.ElemType.(*types.StructType); !ok {
-		// Handle i8* pointer type - we need to bitcast it to the appropriate type first
-		// Get the object's runtime type name
-		objectTypeName := cg.getObjectRuntimeType(object)
-
-		// Look up the struct type for this class
-		structType, exists := cg.TypeMap[objectTypeName]
-		if !exists {
-			panic(fmt.Sprintf("cannot find struct type for class: %s", objectTypeName))
-		}
-
-		// Bitcast the i8* pointer to the appropriate struct pointer type
-		structPtrType := types.NewPointer(structType)
-		object = block.NewBitCast(object, structPtrType)
+	// Look up the method index in the vtable
+	methodIndices, exists := cg.MethodIndices[runtimeType]
+	if !exists {
+		panic(fmt.Sprintf("method indices not found for type: %s", runtimeType))
 	}
 
-	// Get the object's runtime type
-	objectTypeName := cg.getObjectRuntimeType(object)
-
-	// Find the correct method implementation by walking the inheritance chain
-	var methodFunc *ir.Func
-	currentClassName := objectTypeName // Start with the object's type
-
-	// Search up the inheritance chain for the method implementation
-	for {
-		funcName := fmt.Sprintf("%s.%s", currentClassName, methodName)
-
-		// Look for the method in the current class
-		for _, f := range cg.Module.Funcs {
-			if f.Name() == funcName {
-				methodFunc = f
+	methodIndex, exists := methodIndices[methodName]
+	if !exists {
+		// Try to find the method in the parent classes
+		currentClass := runtimeType
+		for {
+			parent, exists := cg.ClassHierarchy[currentClass]
+			if !exists || parent == "" {
 				break
 			}
+			parentMethodIndices, exists := cg.MethodIndices[parent]
+			if !exists {
+				currentClass = parent
+				continue
+			}
+			parentMethodIndex, exists := parentMethodIndices[methodName]
+			if !exists {
+				currentClass = parent
+				continue
+			}
+			// Found the method in a parent class
+			methodIndex = parentMethodIndex
+			exists = true
+			break
 		}
-
-		if methodFunc != nil {
-			break // Found the method
+		if !exists {
+			panic(fmt.Sprintf("method %s not found in class %s or its ancestors", methodName, runtimeType))
 		}
-
-		// Check parent class
-		parentClassName, exists := cg.ClassHierarchy[currentClassName]
-		if !exists || parentClassName == "" {
-			break // No more parents
-		}
-
-		currentClassName = parentClassName
 	}
 
-	if methodFunc == nil {
-		panic(fmt.Sprintf("method %s not found in class %s or its ancestors", methodName, objectTypeName))
+	// Get a pointer to the method in the vtable
+	methodSlotPtr := block.NewGetElementPtr(
+		vtable.ContentType,
+		vtable,
+		constant.NewInt(types.I32, 0),
+		constant.NewInt(types.I32, int64(methodIndex)),
+	)
+
+	// Load the method function pointer
+	methodPtr := block.NewLoad(types.NewPointer(types.I8), methodSlotPtr)
+
+	// Find the target method to get its signature
+	targetMethod := cg.findMethodByName(runtimeType, methodName)
+	if targetMethod == nil {
+		panic(fmt.Sprintf("method %s not found in class %s for signature lookup", methodName, runtimeType))
 	}
 
-	// Check if args already contains the object as the first argument
-	var allArgs []value.Value
-	if len(args) > 0 && args[0] == object {
-		// Object is already the first argument, use args directly
-		allArgs = args
-	} else {
-		// Create a new list of arguments starting with the object itself (self)
-		allArgs = make([]value.Value, 0, len(args)+1)
-		allArgs = append(allArgs, object) // Add 'self' as the first argument
-		allArgs = append(allArgs, args...)
+	// Get the method's declaring class (where it's actually defined)
+	methodDeclaringClass := cg.findMethodDeclaringClass(runtimeType, methodName)
+	if methodDeclaringClass == "" {
+		panic(fmt.Sprintf("declaring class for method %s not found", methodName))
 	}
 
-	// Directly call the found method with the object and arguments
-	call := block.NewCall(methodFunc, allArgs...)
-	return call
+	// Create function type for the method (matching its declaration)
+	classType, exists := cg.TypeMap[methodDeclaringClass]
+	if !exists {
+		panic(fmt.Sprintf("class type %s not found", methodDeclaringClass))
+	}
+
+	// Build the method's parameter types
+	paramTypes := []types.Type{types.NewPointer(classType)} // Self parameter first
+	for _, formal := range targetMethod.Formals {
+		paramType := cg.getLLVMTypeForCOOLType(formal.TypeDecl.Value)
+		paramTypes = append(paramTypes, paramType)
+	}
+
+	// Create function type with proper return type
+	returnType := cg.getLLVMTypeForCOOLTypeWithContext(targetMethod.TypeDecl.Value, methodDeclaringClass)
+	funcType := types.NewPointer(types.NewFunc(returnType, paramTypes...))
+
+	// Cast the method pointer to the correct function type
+	castedMethodPtr := block.NewBitCast(methodPtr, funcType)
+
+	// Prepare the arguments, starting with 'self'
+	// We need to cast 'self' to the method's declaring class type
+	selfArg := block.NewBitCast(object, types.NewPointer(classType))
+
+	// Combine self with the rest of the args, ensuring correct types
+	allArgs := make([]value.Value, 0, len(args)+1)
+	allArgs = append(allArgs, selfArg)
+
+	// Ensure all arguments have the correct type based on the formal parameter types
+	for i, arg := range args {
+		if i < len(targetMethod.Formals) {
+			paramType := cg.getLLVMTypeForCOOLType(targetMethod.Formals[i].TypeDecl.Value)
+			convertedArg := cg.ensureCorrectArgumentType(arg, paramType)
+			allArgs = append(allArgs, convertedArg)
+		} else {
+			// If we have more arguments than formals (shouldn't happen in a well-typed program),
+			// just add the argument as is
+			allArgs = append(allArgs, arg)
+		}
+	}
+
+	// Call the method with the properly typed arguments
+	return block.NewCall(castedMethodPtr, allArgs...)
+}
+
+// Helper method to find the actual class that defines a method
+func (cg *CodeGenerator) findMethodDeclaringClass(className, methodName string) string {
+	// First check if the method is defined in this class
+	class, exists := cg.ClassNameToAST[className]
+	if !exists {
+		return ""
+	}
+
+	// Look for the method in this class's features
+	for _, feature := range class.Features {
+		if method, isMethod := feature.(*ast.Method); isMethod && method.Name.Value == methodName {
+			return className // Method found in this class
+		}
+	}
+
+	// If not found, check the parent class
+	parent, exists := cg.ClassHierarchy[className]
+	if exists && parent != "" {
+		return cg.findMethodDeclaringClass(parent, methodName)
+	}
+
+	// Method not found
+	return ""
+}
+
+// Helper method to find a method's AST node
+func (cg *CodeGenerator) findMethodByName(className, methodName string) *ast.Method {
+	// First check if the method is defined in this class
+	class, exists := cg.ClassNameToAST[className]
+	if !exists {
+		return nil
+	}
+
+	// Look for the method in this class's features
+	for _, feature := range class.Features {
+		if method, isMethod := feature.(*ast.Method); isMethod && method.Name.Value == methodName {
+			return method
+		}
+	}
+
+	// If not found, check the parent class
+	parent, exists := cg.ClassHierarchy[className]
+	if exists && parent != "" {
+		return cg.findMethodByName(parent, methodName)
+	}
+
+	// Method not found
+	return nil
+}
+
+// Helper function to convert COOL types to LLVM types
+func (cg *CodeGenerator) getLLVMTypeForCOOLType(coolType string) types.Type {
+	switch coolType {
+	case "Int":
+		return types.I32
+	case "Bool":
+		return types.I1
+	case "String":
+		return types.NewPointer(types.I8)
+	case "SELF_TYPE":
+		// For SELF_TYPE, we need the current class context
+		// Default to Object if we can't determine the current context
+		classType, exists := cg.TypeMap["Object"]
+		if !exists {
+			panic("Object type not found when processing SELF_TYPE")
+		}
+		return types.NewPointer(classType)
+	case "Object", "IO":
+		fallthrough
+	default:
+		// For other class types, use a pointer to the class type
+		classType, exists := cg.TypeMap[coolType]
+		if !exists {
+			panic(fmt.Sprintf("unknown type: %s", coolType))
+		}
+		return types.NewPointer(classType)
+	}
+}
+
+// Helper function to convert COOL types to LLVM types with class context
+func (cg *CodeGenerator) getLLVMTypeForCOOLTypeWithContext(coolType string, currentClass string) types.Type {
+	if coolType == "SELF_TYPE" {
+		// For SELF_TYPE, use the current class type
+		classType, exists := cg.TypeMap[currentClass]
+		if !exists {
+			panic(fmt.Sprintf("Current class type %s not found when processing SELF_TYPE", currentClass))
+		}
+		return types.NewPointer(classType)
+	}
+	return cg.getLLVMTypeForCOOLType(coolType)
 }
 
 // GenerateMain generates the LLVM main function
@@ -1568,6 +1709,15 @@ func (cg *CodeGenerator) generateDotCallExpression(dotCall *ast.DotCallExpressio
 	// Get the current block
 	block := cg.CurrentBlock
 
+	// Handle case expression results specially when used as method receivers
+	// Check if the object value is a result of a case expression
+	caseResult, isCaseResult := cg.CaseResults[objectValue]
+	if isCaseResult {
+		// Special handling for case results - use the stored type information
+		// TODO: Use the branch types information to ensure correct dispatch
+		objectValue = caseResult.Value
+	}
+
 	// Generate LLVM values for all arguments
 	argValues := make([]value.Value, 0, len(dotCall.Arguments)+1)
 
@@ -1580,17 +1730,31 @@ func (cg *CodeGenerator) generateDotCallExpression(dotCall *ast.DotCallExpressio
 	}
 
 	// Special case for IO.out_string and IO.out_int to call runtime functions directly
-	// This avoids the vtable dispatch which is causing issues
 	if dotCall.Method.Value == "out_string" || dotCall.Method.Value == "out_int" {
-		// First check if the object is an IO object
-		objType := objectValue.Type().(*types.PointerType).ElemType
-		if structType, isStruct := objType.(*types.StructType); isStruct && structType.Name() == "IO" {
+		// First check if the object is an IO object or can be cast to an IO object
+		var isIOObject bool
+		if ptrType, isPtr := objectValue.Type().(*types.PointerType); isPtr {
+			if structType, isStruct := ptrType.ElemType.(*types.StructType); isStruct {
+				isIOObject = structType.Name() == "IO"
+			}
+		}
+
+		// Try to handle IO methods
+		if isIOObject || cg.canCastTo(objectValue, "IO") {
+			// Cast object to IO if needed
+			ioObjValue := objectValue
+			if !isIOObject {
+				ioType, exists := cg.TypeMap["IO"]
+				if exists {
+					ioObjValue = block.NewBitCast(objectValue, types.NewPointer(ioType))
+				}
+			}
+
 			if dotCall.Method.Value == "out_string" && len(argValues) > 1 {
 				// Find or create the runtime function
 				var outStringFunc *ir.Func
-				// Look for an existing declaration
 				for _, f := range cg.Module.Funcs {
-					if f.Name() == "IO.out_string" { // Corrected function name
+					if f.Name() == "IO.out_string" {
 						outStringFunc = f
 						break
 					}
@@ -1598,23 +1762,27 @@ func (cg *CodeGenerator) generateDotCallExpression(dotCall *ast.DotCallExpressio
 
 				if outStringFunc == nil {
 					// If the function isn't already declared, declare it
-					outStringFunc = cg.Module.NewFunc("IO.out_string", types.NewPointer(cg.TypeMap["IO"]), ir.NewParam("self", types.NewPointer(cg.TypeMap["IO"])), ir.NewParam("str", types.NewPointer(types.I8))) // Corrected signature
+					outStringFunc = cg.Module.NewFunc("IO.out_string", types.NewPointer(cg.TypeMap["IO"]),
+						ir.NewParam("self", types.NewPointer(cg.TypeMap["IO"])),
+						ir.NewParam("str", types.NewPointer(types.I8)))
 				}
 
-				// Make the call with the self and string argument
-				block.NewCall(outStringFunc, argValues...)
+				// Ensure string argument has the right type
+				strArg := argValues[1]
+				convertedStrArg := cg.ensureCorrectArgumentType(strArg, types.NewPointer(types.I8))
 
-				// Return the IO object itself (this is what COOL's out_string does)
-				return objectValue
+				// Make the call with the properly typed arguments
+				callArgs := []value.Value{ioObjValue, convertedStrArg}
+				block.NewCall(outStringFunc, callArgs...)
+
+				// Return the IO object itself
+				return ioObjValue
 
 			} else if dotCall.Method.Value == "out_int" && len(argValues) > 1 {
-				// Get the int argument (skip self which is at index 0)
-
 				// Find or create the runtime function
 				var outIntFunc *ir.Func
-				// Look for an existing declaration
 				for _, f := range cg.Module.Funcs {
-					if f.Name() == "IO.out_int" { // Corrected function name
+					if f.Name() == "IO.out_int" {
 						outIntFunc = f
 						break
 					}
@@ -1622,274 +1790,24 @@ func (cg *CodeGenerator) generateDotCallExpression(dotCall *ast.DotCallExpressio
 
 				if outIntFunc == nil {
 					// If the function isn't already declared, declare it
-					outIntFunc = cg.Module.NewFunc("IO.out_int", types.NewPointer(cg.TypeMap["IO"]), ir.NewParam("self", types.NewPointer(cg.TypeMap["IO"])), ir.NewParam("n", types.I32)) // Corrected signature
+					outIntFunc = cg.Module.NewFunc("IO.out_int", types.NewPointer(cg.TypeMap["IO"]),
+						ir.NewParam("self", types.NewPointer(cg.TypeMap["IO"])),
+						ir.NewParam("n", types.I32))
 				}
 
-				// Make the call with self and the int argument
-				block.NewCall(outIntFunc, argValues...)
+				// Ensure int argument has the right type
+				intArg := argValues[1]
+				convertedIntArg := cg.ensureCorrectArgumentType(intArg, types.I32)
 
-				// Return the IO object itself (this is what COOL's out_int does)
-				return objectValue
-			} else if dotCall.Method.Value == "in_int" {
-				// Find or create the runtime function
-				var inIntFunc *ir.Func
-				// Look for an existing declaration
-				for _, f := range cg.Module.Funcs {
-					if f.Name() == "IO.in_int" {
-						inIntFunc = f
-						break
-					}
-				}
+				// Make the call with properly typed arguments
+				callArgs := []value.Value{ioObjValue, convertedIntArg}
+				block.NewCall(outIntFunc, callArgs...)
 
-				if inIntFunc == nil {
-					// If the function isn't already declared, declare it
-					inIntFunc = cg.Module.NewFunc("IO.in_int", types.I32, ir.NewParam("self", types.NewPointer(cg.TypeMap["IO"])))
-				}
-
-				// Make the call with self
-				result := block.NewCall(inIntFunc, argValues[0])
-				return result
-			} else if dotCall.Method.Value == "in_string" {
-				// Find or create the runtime function
-				var inStringFunc *ir.Func
-				// Look for an existing declaration
-				for _, f := range cg.Module.Funcs {
-					if f.Name() == "IO.in_string" {
-						inStringFunc = f
-						break
-					}
-				}
-
-				if inStringFunc == nil {
-					// If the function isn't already declared, declare it
-					inStringFunc = cg.Module.NewFunc("IO.in_string", types.NewPointer(cg.TypeMap["String"]), ir.NewParam("self", types.NewPointer(cg.TypeMap["IO"])))
-				}
-
-				// Make the call with self
-				result := block.NewCall(inStringFunc, argValues[0])
-				return result
-			}
-		}
-	} else if objType, ok := objectValue.Type().(*types.PointerType); ok {
-		if elemType, isStruct := objType.ElemType.(*types.StructType); isStruct && elemType.Name() == "String" {
-			if dotCall.Method.Value == "length" {
-				// Find or create the runtime function
-				var lengthFunc *ir.Func
-				// Look for an existing declaration
-				for _, f := range cg.Module.Funcs {
-					if f.Name() == "String.length" {
-						lengthFunc = f
-						break
-					}
-				}
-
-				if lengthFunc == nil {
-					// If the function isn't already declared, declare it
-					lengthFunc = cg.Module.NewFunc("String.length", types.I32, ir.NewParam("self", types.NewPointer(cg.TypeMap["String"])))
-				}
-
-				// Make the call with self
-				result := block.NewCall(lengthFunc, argValues[0])
-				return result
-			} else if dotCall.Method.Value == "concat" && len(argValues) > 1 {
-				// Find or create the runtime function
-				var concatFunc *ir.Func
-				// Look for an existing declaration
-				for _, f := range cg.Module.Funcs {
-					if f.Name() == "String.concat" {
-						concatFunc = f
-						break
-					}
-				}
-
-				if concatFunc == nil {
-					// If the function isn't already declared, declare it
-					concatFunc = cg.Module.NewFunc("String.concat", types.NewPointer(cg.TypeMap["String"]),
-						ir.NewParam("self", types.NewPointer(cg.TypeMap["String"])),
-						ir.NewParam("s", types.NewPointer(cg.TypeMap["String"])))
-				}
-
-				// Make the call with self and the string argument
-				result := block.NewCall(concatFunc, argValues...)
-				return result
-			} else if dotCall.Method.Value == "substr" && len(argValues) > 2 {
-				// Find or create the runtime function
-				var substrFunc *ir.Func
-				// Look for an existing declaration
-				for _, f := range cg.Module.Funcs {
-					if f.Name() == "String.substr" {
-						substrFunc = f
-						break
-					}
-				}
-
-				if substrFunc == nil {
-					// If the function isn't already declared, declare it
-					substrFunc = cg.Module.NewFunc("String.substr", types.NewPointer(cg.TypeMap["String"]),
-						ir.NewParam("self", types.NewPointer(cg.TypeMap["String"])),
-						ir.NewParam("i", types.I32),
-						ir.NewParam("l", types.I32))
-				}
-
-				// Make the call with self and integer arguments
-				result := block.NewCall(substrFunc, argValues...)
-				return result
-			}
-		} else if elemType, isStruct := objType.ElemType.(*types.StructType); isStruct && elemType.Name() == "Object" {
-			if dotCall.Method.Value == "abort" {
-				// Find or create the runtime function
-				var abortFunc *ir.Func
-				// Look for an existing declaration
-				for _, f := range cg.Module.Funcs {
-					if f.Name() == "Object.abort" {
-						abortFunc = f
-						break
-					}
-				}
-
-				if abortFunc == nil {
-					// If the function isn't already declared, declare it
-					abortFunc = cg.Module.NewFunc("Object.abort", types.Void, ir.NewParam("self", types.NewPointer(cg.TypeMap["Object"])))
-				}
-
-				// Make the call with self
-				block.NewCall(abortFunc, argValues[0])
-				// Abort doesn't return, but for safety, return the object
-				return objectValue
-			} else if dotCall.Method.Value == "type_name" {
-				// Find or create the runtime function
-				var typeNameFunc *ir.Func
-				// Look for an existing declaration
-				for _, f := range cg.Module.Funcs {
-					if f.Name() == "Object.type_name" {
-						typeNameFunc = f
-						break
-					}
-				}
-
-				if typeNameFunc == nil {
-					// If the function isn't already declared, declare it
-					typeNameFunc = cg.Module.NewFunc("Object.type_name", types.NewPointer(cg.TypeMap["String"]), ir.NewParam("self", types.NewPointer(cg.TypeMap["Object"])))
-				}
-
-				// Make the call with self
-				result := block.NewCall(typeNameFunc, argValues[0])
-				return result
-			} else if dotCall.Method.Value == "copy" {
-				// Find or create the runtime function
-				var copyFunc *ir.Func
-				// Look for an existing declaration
-				for _, f := range cg.Module.Funcs {
-					if f.Name() == "Object.copy" {
-						copyFunc = f
-						break
-					}
-				}
-
-				if copyFunc == nil {
-					// If the function isn't already declared, declare it
-					// Copy returns the type of self
-					copyFunc = cg.Module.NewFunc("Object.copy", types.NewPointer(cg.TypeMap["Object"]), ir.NewParam("self", types.NewPointer(cg.TypeMap["Object"])))
-				}
-
-				// Make the call with self
-				result := block.NewCall(copyFunc, argValues[0])
-				return result
+				// Return the IO object itself
+				return ioObjValue
 			}
 		}
 	}
-
-	// Special case for String methods (length, concat, substr)
-	if isStringPointer(objectValue.Type()) {
-		// Handle string methods directly
-		if dotCall.Method.Value == "length" {
-			// Find or create the String.length function
-			var lengthFunc *ir.Func
-			for _, f := range cg.Module.Funcs {
-				if f.Name() == "String.length" {
-					lengthFunc = f
-					break
-				}
-			}
-
-			if lengthFunc == nil {
-				// If not found, create a new function declaration
-				lengthFunc = cg.Module.NewFunc(
-					"String.length",
-					types.I32,
-					ir.NewParam("self", types.NewPointer(types.I8)),
-				)
-			}
-
-			// Call the length function with the string object
-			return block.NewCall(lengthFunc, objectValue)
-
-		} else if dotCall.Method.Value == "concat" && len(argValues) > 1 {
-			// Find or create the String.concat function
-			var concatFunc *ir.Func
-			for _, f := range cg.Module.Funcs {
-				if f.Name() == "String.concat" {
-					concatFunc = f
-					break
-				}
-			}
-
-			if concatFunc == nil {
-				// If not found, create a new function declaration
-				concatFunc = cg.Module.NewFunc(
-					"String.concat",
-					types.NewPointer(types.I8), // Return type is String
-					ir.NewParam("self", types.NewPointer(types.I8)),
-					ir.NewParam("s", types.NewPointer(types.I8)), // String to concatenate
-				)
-			}
-
-			// For any non-i8* arguments, try to convert them to i8*
-			if len(argValues) > 1 && argValues[1].Type() != types.NewPointer(types.I8) {
-				// Try to get the string data from a String object
-				if ptrType, ok := argValues[1].Type().(*types.PointerType); ok {
-					if structType, ok := ptrType.ElemType.(*types.StructType); ok && structType.Name() == "String" {
-						strPtr := block.NewGetElementPtr(
-							cg.TypeMap["String"],
-							argValues[1],
-							constant.NewInt(types.I32, 0),
-							constant.NewInt(types.I32, 1),
-						)
-						argValues[1] = block.NewLoad(types.NewPointer(types.I8), strPtr)
-					}
-				}
-			}
-
-			// Call the concat function with the string object and argument
-			return block.NewCall(concatFunc, objectValue, argValues[1])
-
-		} else if dotCall.Method.Value == "substr" && len(argValues) > 2 {
-			// Find or create the String.substr function
-			var substrFunc *ir.Func
-			for _, f := range cg.Module.Funcs {
-				if f.Name() == "String.substr" {
-					substrFunc = f
-					break
-				}
-			}
-
-			if substrFunc == nil {
-				// If not found, create a new function declaration
-				substrFunc = cg.Module.NewFunc(
-					"String.substr",
-					types.NewPointer(types.I8), // Return type is String
-					ir.NewParam("self", types.NewPointer(types.I8)),
-					ir.NewParam("i", types.I32), // Starting index
-					ir.NewParam("l", types.I32), // Length
-				)
-			}
-
-			// Call the substr function with the string object and arguments
-			return block.NewCall(substrFunc, objectValue, argValues[1], argValues[2])
-		}
-	}
-
-	// At this point, handle all other method calls
 
 	// Check if this is a static dispatch (explicitly specifying the type)
 	if dotCall.Type != nil {
@@ -1933,16 +1851,36 @@ func (cg *CodeGenerator) generateStaticDispatch(object value.Value, typeName str
 		panic(fmt.Sprintf("method %s not found in class %s", methodName, typeName))
 	}
 
-	// Ensure the object is the first argument (self)
-	var allArgs []value.Value
-	if len(args) > 0 && args[0] == object {
-		// Object is already the first argument, use args directly
-		allArgs = args
-	} else {
-		// Create a new list of arguments starting with the object itself (self)
-		allArgs = make([]value.Value, 0, len(args)+1)
-		allArgs = append(allArgs, object) // Add 'self' as the first argument
-		allArgs = append(allArgs, args...)
+	// Get the target class type to cast the object
+	classType, exists := cg.TypeMap[typeName]
+	if !exists {
+		panic(fmt.Sprintf("class type %s not found", typeName))
+	}
+
+	// Find the target method to get its signature for correct argument conversion
+	targetMethod := cg.findMethodByName(typeName, methodName)
+	if targetMethod == nil {
+		panic(fmt.Sprintf("method %s not found in class %s for signature lookup", methodName, typeName))
+	}
+
+	// Cast the object to the target class type
+	castedObject := block.NewBitCast(object, types.NewPointer(classType))
+
+	// Create a new list of arguments starting with the properly typed object
+	allArgs := make([]value.Value, 0, len(args)+1)
+	allArgs = append(allArgs, castedObject) // Add properly cast 'self' as the first argument
+
+	// Ensure all arguments have the correct type based on the formal parameter types
+	for i, arg := range args {
+		if i < len(targetMethod.Formals) {
+			paramType := cg.getLLVMTypeForCOOLType(targetMethod.Formals[i].TypeDecl.Value)
+			convertedArg := cg.ensureCorrectArgumentType(arg, paramType)
+			allArgs = append(allArgs, convertedArg)
+		} else {
+			// If we have more arguments than formals (shouldn't happen in a well-typed program),
+			// just add the argument as is
+			allArgs = append(allArgs, arg)
+		}
 	}
 
 	// In static dispatch, we call the method directly by name rather than through the vtable
@@ -2191,7 +2129,6 @@ func (cg *CodeGenerator) generateCaseExpression(caseExpr *ast.CaseExpression) va
 	}
 
 	// Get the runtime type of the object for branching based on type
-	// This is a critical part - we need to get the actual runtime type, not just the static type
 	// Create a temporary block for getting the runtime type
 	typeCheckBlock := currentFunc.NewBlock("case.typecheck" + counterSuffix)
 	currentBlock.NewBr(typeCheckBlock)
@@ -2275,6 +2212,7 @@ func (cg *CodeGenerator) generateCaseExpression(caseExpr *ast.CaseExpression) va
 
 	// Generate code for each branch
 	branchValues := make([]value.Value, len(caseExpr.Branches))
+	branchRealTypes := make([]string, len(caseExpr.Branches)) // Track actual COOL types for branches
 	branchEndBlocks := make([]*ir.Block, len(caseExpr.Branches))
 
 	for i, branch := range caseExpr.Branches {
@@ -2287,13 +2225,30 @@ func (cg *CodeGenerator) generateCaseExpression(caseExpr *ast.CaseExpression) va
 			oldSymbols[k] = v
 		}
 
-		// Add the branch variable to the symbol table
-		// In a real implementation, we would cast the object to the branch's type
-		// For now, we'll just use the object directly
-		cg.Symbols[branch.Identifier.Value] = exprValue
+		// Cast the expression to the branch type
+		var castedValue value.Value
+		if branchType, exists := cg.TypeMap[branch.Type.Value]; exists {
+			// Check if we're trying to cast from a primitive type to an object type
+			_, isExprPtr := exprValue.Type().(*types.PointerType)
+			if !isExprPtr && (exprValue.Type() == types.I32 || exprValue.Type() == types.I1) {
+				// First convert to i8* using inttoptr
+				tmpPtr := cg.CurrentBlock.NewIntToPtr(exprValue, types.NewPointer(types.I8))
+				// Then bitcast to the target type
+				castedValue = cg.CurrentBlock.NewBitCast(tmpPtr, types.NewPointer(branchType))
+			} else {
+				// Normal pointer-to-pointer cast
+				castedValue = cg.CurrentBlock.NewBitCast(exprValue, types.NewPointer(branchType))
+			}
+		} else {
+			castedValue = exprValue // Fallback if type doesn't exist (shouldn't happen)
+		}
+
+		// Add the branch variable to the symbol table with the properly typed value
+		cg.Symbols[branch.Identifier.Value] = castedValue
 
 		// Generate code for the branch expression
 		branchValues[i] = cg.generateExpression(branch.Expression)
+		branchRealTypes[i] = branch.Type.Value // Store the COOL type for this branch
 
 		// Restore the old symbol table
 		cg.Symbols = oldSymbols
@@ -2329,7 +2284,7 @@ func (cg *CodeGenerator) generateCaseExpression(caseExpr *ast.CaseExpression) va
 		resultType = types.NewPointer(types.I8)
 	}
 
-	// Create the PHI node
+	// Create the PHI node with the result type
 	phi := &ir.InstPhi{Typ: resultType}
 	endBlock.Insts = append(endBlock.Insts, phi)
 
@@ -2337,30 +2292,35 @@ func (cg *CodeGenerator) generateCaseExpression(caseExpr *ast.CaseExpression) va
 	for i, val := range branchValues {
 		// If the branch value type doesn't match the result type, cast it
 		if !val.Type().Equal(resultType) {
-			// Cast to the common type
-			// This would require custom casting logic in a real implementation
-			if _, isResultPtr := resultType.(*types.PointerType); isResultPtr {
-				if val.Type() == types.I1 {
-					// Convert boolean to pointer
-					val = branchEndBlocks[i].NewIntToPtr(val, types.NewPointer(types.I8))
-					if !types.NewPointer(types.I8).Equal(resultType) {
-						val = branchEndBlocks[i].NewBitCast(val, resultType)
-					}
-				} else if _, isValPtr := val.Type().(*types.PointerType); isValPtr {
-					// Bitcast between pointer types
-					val = branchEndBlocks[i].NewBitCast(val, resultType)
-				} else {
-					// For other primitive types that need to be cast to pointer
-					panic(fmt.Sprintf("cannot cast from %v to %v", val.Type(), resultType))
-				}
+			// Check if we need to convert from primitive to pointer type
+			_, valIsPtr := val.Type().(*types.PointerType)
+			_, resultIsPtr := resultType.(*types.PointerType)
+
+			if !valIsPtr && resultIsPtr && (val.Type() == types.I1 || val.Type() == types.I32) {
+				// First convert primitive to i8* with inttoptr
+				tmpPtr := branchEndBlocks[i].NewIntToPtr(val, types.NewPointer(types.I8))
+				// Then bitcast to the target type
+				val = branchEndBlocks[i].NewBitCast(tmpPtr, resultType)
 			} else {
-				// Other casts not handled here
-				panic(fmt.Sprintf("cannot cast from %v to %v", val.Type(), resultType))
+				// Use ensureCorrectArgumentType for other cases
+				val = cg.ensureCorrectArgumentType(val, resultType)
 			}
 		}
 
 		phi.Incs = append(phi.Incs, &ir.Incoming{X: val, Pred: branchEndBlocks[i]})
 	}
+
+	// Create a wrapper for the result that includes both the value and its COOL type
+	result := &CaseResult{
+		Value:       phi,
+		BranchTypes: branchRealTypes,
+	}
+
+	// Store the result in a map so it can be retrieved later when needed
+	if cg.CaseResults == nil {
+		cg.CaseResults = make(map[value.Value]*CaseResult)
+	}
+	cg.CaseResults[phi] = result
 
 	return phi
 }
@@ -2857,19 +2817,16 @@ func (cg *CodeGenerator) generateStringLengthMethod() {
 	// If it's a raw string pointer, use it directly
 	rawStrPtr := rawStringBlock.NewBitCast(funcDecl.Params[0], types.NewPointer(types.I8))
 	rawLength := rawStringBlock.NewCall(cg.StdlibFuncs["strlen"], rawStrPtr)
-	// Return directly from this block
 	rawStringBlock.NewRet(rawLength)
 
-	// If it's a proper String struct, get the string field
-	strPtr := structStringBlock.NewGetElementPtr(
-		stringType,
-		funcDecl.Params[0],
-		constant.NewInt(types.I32, 0),
-		constant.NewInt(types.I32, 1), // Access the string data field
-	)
-	loadedPtr := structStringBlock.NewLoad(types.NewPointer(types.I8), strPtr)
-	structLength := structStringBlock.NewCall(cg.StdlibFuncs["strlen"], loadedPtr)
-	// Return directly from this block
+	// If it's a proper String struct
+	// Instead of using getelementptr, use simple bitcast for compatibility
+	// First cast the String* to i8** (pointer to pointer)
+	selfAsI8PtrPtr := structStringBlock.NewBitCast(funcDecl.Params[0], types.NewPointer(types.NewPointer(types.I8)))
+	// Then load the i8* stored in the struct
+	stringPtr := structStringBlock.NewLoad(types.NewPointer(types.I8), selfAsI8PtrPtr)
+	// Get the length
+	structLength := structStringBlock.NewCall(cg.StdlibFuncs["strlen"], stringPtr)
 	structStringBlock.NewRet(structLength)
 }
 
@@ -2937,15 +2894,9 @@ func (cg *CodeGenerator) generateStringConcatMethod() {
 	rawStringBlock.NewRet(resultPtr)
 
 	// ---- Struct String Block ----
-	// Get the string pointers from the String objects
-	stringType := cg.TypeMap["String"]
-	selfStrPtr := structStringBlock.NewGetElementPtr(
-		stringType,
-		concatFunc.Params[0],
-		constant.NewInt(types.I32, 0),
-		constant.NewInt(types.I32, 1), // Access the string data field
-	)
-	selfStrLoad := structStringBlock.NewLoad(types.NewPointer(types.I8), selfStrPtr)
+	// Use bitcast approach for compatibility
+	selfAsI8PtrPtr := structStringBlock.NewBitCast(concatFunc.Params[0], types.NewPointer(types.NewPointer(types.I8)))
+	selfStrLoad := structStringBlock.NewLoad(types.NewPointer(types.I8), selfAsI8PtrPtr)
 	otherStrLoad := concatFunc.Params[1] // Already an i8*
 
 	// Get lengths of both strings
@@ -3055,15 +3006,9 @@ func (cg *CodeGenerator) generateStringSubstrMethod() {
 	allocRawBlock.NewRet(mallocCallRaw)
 
 	// ---- Struct String Block (for String* input) ----
-	// Get the string from the String object
-	stringType := cg.TypeMap["String"]
-	selfStrPtr := structStringBlock.NewGetElementPtr(
-		stringType,
-		substrFunc.Params[0],
-		constant.NewInt(types.I32, 0),
-		constant.NewInt(types.I32, 1), // Access the string data field
-	)
-	loadedStr := structStringBlock.NewLoad(types.NewPointer(types.I8), selfStrPtr)
+	// Use bitcast approach for compatibility
+	selfAsI8PtrPtr := structStringBlock.NewBitCast(substrFunc.Params[0], types.NewPointer(types.NewPointer(types.I8)))
+	loadedStr := structStringBlock.NewLoad(types.NewPointer(types.I8), selfAsI8PtrPtr)
 
 	// Get the parameters
 	startIdxStruct := substrFunc.Params[1] // Starting index
@@ -3120,7 +3065,7 @@ func (cg *CodeGenerator) generateStringSubstrMethod() {
 	allocStructBlock.NewRet(mallocCallStruct)
 }
 
-// isStringPointer checks if a type is a pointer to i8 (string type in LLVM)
+// isStringPointer checks if a type is a pointer to i8 (string type in LLVM) or a %String* type
 func isStringPointer(t types.Type) bool {
 	// Check if it's directly an i8 pointer
 	if t == types.NewPointer(types.I8) {
@@ -3132,7 +3077,188 @@ func isStringPointer(t types.Type) bool {
 		if ptrType.ElemType == types.I8 {
 			return true
 		}
+
+		// Check if it's a %String* type (pointer to String struct)
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok {
+			if structType.Name() == "String" {
+				return true
+			}
+		}
 	}
 
 	return false
+}
+
+// isStringObject checks if a type is specifically a %String* (not just an i8*)
+func isStringObject(t types.Type, cg *CodeGenerator) bool {
+	if ptrType, ok := t.(*types.PointerType); ok {
+		stringType, exists := cg.TypeMap["String"]
+		if !exists {
+			return false
+		}
+		return ptrType.ElemType == stringType
+	}
+	return false
+}
+
+// isIntType checks if a type is an i32 (primitive int) or %Int* (Int object)
+func isIntType(t types.Type, cg *CodeGenerator) bool {
+	if t == types.I32 {
+		return true
+	}
+
+	if ptrType, ok := t.(*types.PointerType); ok {
+		intType, exists := cg.TypeMap["Int"]
+		if !exists {
+			return false
+		}
+		return ptrType.ElemType == intType
+	}
+
+	return false
+}
+
+// isBoolType checks if a type is an i1 (primitive bool) or %Bool* (Bool object)
+func isBoolType(t types.Type, cg *CodeGenerator) bool {
+	if t == types.I1 {
+		return true
+	}
+
+	if ptrType, ok := t.(*types.PointerType); ok {
+		boolType, exists := cg.TypeMap["Bool"]
+		if !exists {
+			return false
+		}
+		return ptrType.ElemType == boolType
+	}
+
+	return false
+}
+
+// ensureCorrectArgumentType checks if the argument type matches the expected parameter type
+// and performs necessary type conversions if needed
+func (cg *CodeGenerator) ensureCorrectArgumentType(arg value.Value, paramType types.Type) value.Value {
+	block := cg.CurrentBlock
+
+	// If types already match, no conversion needed
+	if arg.Type() == paramType {
+		return arg
+	}
+
+	// Handle conversions between primitive types and their object representations
+
+	// Check if we're trying to convert between a primitive type and a pointer type
+	_, argIsPtr := arg.Type().(*types.PointerType)
+	_, paramIsPtr := paramType.(*types.PointerType)
+
+	// Converting from a primitive type to a pointer type
+	if !argIsPtr && paramIsPtr {
+		// For integer or boolean to pointer conversion
+		if arg.Type() == types.I32 || arg.Type() == types.I1 {
+			// Use inttoptr for primitive to pointer conversion
+			tmpPtr := block.NewIntToPtr(arg, types.NewPointer(types.I8))
+
+			// If we need a specific pointer type, cast to it
+			if paramType != types.NewPointer(types.I8) {
+				return block.NewBitCast(tmpPtr, paramType)
+			}
+			return tmpPtr
+		}
+
+		// For other primitive types, create a boxed object
+		if arg.Type() == types.I32 {
+			// Create an Int object to wrap the int value
+			intObj := cg.generateObjectAllocation("Int")
+			// In a real implementation, we would store the value in the object
+			return intObj
+		} else if arg.Type() == types.I1 {
+			// Create a Bool object to wrap the boolean value
+			boolObj := cg.generateObjectAllocation("Bool")
+			// In a real implementation, we would store the value in the object
+			return boolObj
+		}
+	}
+
+	// Converting from a pointer type to a primitive type
+	if argIsPtr && !paramIsPtr {
+		// For pointer to integer or boolean conversion
+		if paramType == types.I32 || paramType == types.I1 {
+			// Use ptrtoint for pointer to primitive conversion
+			return block.NewPtrToInt(arg, paramType)
+		}
+	}
+
+	// String conversion cases
+	if isStringPointer(paramType) {
+		// For String methods that expect %String* but getting i8*
+		if arg.Type() == types.NewPointer(types.I8) && isStringObject(paramType, cg) {
+			// Create a String object or wrap the string pointer if needed
+			// This is a simplified approach - ideally we'd create a proper String object
+			return block.NewBitCast(arg, paramType)
+		} else if isStringObject(arg.Type(), cg) && paramType == types.NewPointer(types.I8) {
+			// For String methods that expect i8* but getting %String*
+			// Extract the string pointer from the String object
+			// This is a simplified approach - ideally we'd access the string buffer inside the String object
+			return block.NewBitCast(arg, paramType)
+		} else if isStringPointer(arg.Type()) {
+			// Handle any other string pointer casting needs
+			return block.NewBitCast(arg, paramType)
+		}
+	}
+
+	// Generic pointer casting for object types
+	if paramIsPtr && argIsPtr {
+		// Cast between pointer types
+		return block.NewBitCast(arg, paramType)
+	}
+
+	// If we can't figure out a better conversion, try a final approach based on type
+	if paramIsPtr {
+		// If parameter type is a pointer but arg is not, and we didn't handle it above
+		// Try to box the primitive value into an object
+		if arg.Type() == types.I32 {
+			intObj := cg.generateObjectAllocation("Int")
+			return block.NewBitCast(intObj, paramType)
+		} else if arg.Type() == types.I1 {
+			boolObj := cg.generateObjectAllocation("Bool")
+			return block.NewBitCast(boolObj, paramType)
+		}
+		// Last resort for primitives to pointers - use inttoptr as a generic approach
+		if !argIsPtr && (arg.Type() == types.I32 || arg.Type() == types.I1) {
+			tmpPtr := block.NewIntToPtr(arg, types.NewPointer(types.I8))
+			return block.NewBitCast(tmpPtr, paramType)
+		}
+	}
+
+	// We've tried everything, just attempt a bitcast and hope for the best
+	// (this may fail during LLVM validation if types are incompatible)
+	return block.NewBitCast(arg, paramType)
+}
+
+// canCastTo checks if an object can be cast to the specified class type
+// This checks the class hierarchy to determine if the cast is valid
+func (cg *CodeGenerator) canCastTo(obj value.Value, targetClassName string) bool {
+	// Get the runtime type of the object
+	runtimeType := cg.getObjectRuntimeType(obj)
+	if runtimeType == targetClassName {
+		// Direct match, can cast
+		return true
+	}
+
+	// Check class hierarchy
+	currentType := runtimeType
+	for {
+		parent, exists := cg.ClassHierarchy[currentType]
+		if !exists || parent == "" {
+			// Reached Object or unknown class
+			return false
+		}
+
+		if parent == targetClassName {
+			// Found target class in ancestry, can cast
+			return true
+		}
+
+		currentType = parent
+	}
 }
