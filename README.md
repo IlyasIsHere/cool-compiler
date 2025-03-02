@@ -27,7 +27,8 @@ This will:
 2. Perform semantic analysis
 3. Generate LLVM IR code (saved to `output.ll`)
 4. Compile the IR code to an executable (`output.exe`)
-5. Automatically run the executable
+
+Then you can run the executable.
 
 ## Project Structure
 
