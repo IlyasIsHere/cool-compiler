@@ -855,7 +855,7 @@ func (sa *SemanticAnalyser) getDotCallExpressionType(dotCall *ast.DotCallExpress
 	returnType := methodDef.TypeDecl.Value
 	if returnType == "SELF_TYPE" {
 		// For SELF_TYPE return in dispatch, the result type is the *object's type*, not necessarily currentClass
-		return objectType // Crucial adjustment for SELF_TYPE in dispatch
+		return objectType
 	}
 	return returnType
 }
