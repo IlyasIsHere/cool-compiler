@@ -3,8 +3,8 @@
 %Int = type { i8* }
 %String = type { i8* }
 %Bool = type { i8* }
-%Node = type { i8*, %Object*, %Node* }
-%LinkedList = type { i8*, %Node*, %Node*, i32, %IO* }
+%Node = type { i8*, i32, %Node* }
+%LinkedList = type { i8*, %Node*, %Node*, i32 }
 %Main = type { i8* }
 
 @.str.empty = constant [1 x i8] c"\00"
@@ -13,21 +13,31 @@
 @vtable.Int = global [3 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
 @vtable.String = global [6 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (i8* (%String*, i8*)* @String.concat to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i32 (%String*)* @String.length to i8*), i8* bitcast (i8* (%String*, i32, i32)* @String.substr to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
 @vtable.Bool = global [3 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
-@vtable.Node = global [7 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (%Object* (%Node*)* @Node.getData to i8*), i8* bitcast (%Node* (%Node*)* @Node.getNext to i8*), i8* bitcast (%Node* (%Node*, %Object*, %Node*)* @Node.init to i8*), i8* bitcast (%Node* (%Node*, %Node*)* @Node.setNext to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
-@vtable.LinkedList = global [11 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%LinkedList* (%LinkedList*, %Object*)* @LinkedList.addFirst to i8*), i8* bitcast (%LinkedList* (%LinkedList*, %Object*)* @LinkedList.addLast to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (%Object* (%LinkedList*, i32)* @LinkedList.get to i8*), i8* bitcast (%LinkedList* (%LinkedList*)* @LinkedList.init to i8*), i8* bitcast (i1 (%LinkedList*)* @LinkedList.isEmpty to i8*), i8* bitcast (%Object* (%LinkedList*)* @LinkedList.removeFirst to i8*), i8* bitcast (%Object* (%LinkedList*)* @LinkedList.removeLast to i8*), i8* bitcast (i32 (%LinkedList*)* @LinkedList.size to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
-@vtable.Main = global [4 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (%Object* (%Main*)* @Main.main to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
+@vtable.Node = global [7 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i32 (%Node*)* @Node.getData to i8*), i8* bitcast (%Node* (%Node*)* @Node.getNext to i8*), i8* bitcast (%Node* (%Node*, i32, %Node*)* @Node.init to i8*), i8* bitcast (%Node* (%Node*, %Node*)* @Node.setNext to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
+@vtable.LinkedList = global [10 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%LinkedList* (%LinkedList*, i32)* @LinkedList.addFirst to i8*), i8* bitcast (%LinkedList* (%LinkedList*, i32)* @LinkedList.addLast to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i32 (%LinkedList*, i32)* @LinkedList.get to i8*), i8* bitcast (%LinkedList* (%LinkedList*)* @LinkedList.init to i8*), i8* bitcast (i1 (%LinkedList*)* @LinkedList.isEmpty to i8*), i8* bitcast (i32 (%LinkedList*)* @LinkedList.removeFirst to i8*), i8* bitcast (i32 (%LinkedList*)* @LinkedList.size to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
+@vtable.Main = global [8 x i8*] [i8* bitcast (%Object* (%Object*)* @Object.abort to i8*), i8* bitcast (%Object* (%Object*)* @Object.copy to i8*), i8* bitcast (i32 (%IO*)* @IO.in_int to i8*), i8* bitcast (i8* (%IO*)* @IO.in_string to i8*), i8* bitcast (%Object* (%Main*)* @Main.main to i8*), i8* bitcast (%IO* (%IO*, i32)* @IO.out_int to i8*), i8* bitcast (%IO* (%IO*, i8*)* @IO.out_string to i8*), i8* bitcast (i8* (%Object*)* @Object.type_name to i8*)]
 @.str9 = internal constant [41 x i8] c"Error: Cannot remove from an empty list\0A\00"
-@.str10 = internal constant [41 x i8] c"Error: Cannot remove from an empty list\0A\00"
-@.str11 = internal constant [45 x i8] c"Error: Index out of bounds (negative index)\0A\00"
-@.str12 = internal constant [46 x i8] c"Error: Index out of bounds (index too large)\0A\00"
+@.str10 = internal constant [45 x i8] c"Error: Index out of bounds (negative index)\0A\00"
+@.str11 = internal constant [46 x i8] c"Error: Index out of bounds (index too large)\0A\00"
+@.str12 = internal constant [26 x i8] c"Created a new LinkedList\0A\00"
 @.str13 = internal constant [12 x i8] c"List size: \00"
 @.str14 = internal constant [2 x i8] c"\0A\00"
 @.str15 = internal constant [16 x i8] c"First element: \00"
 @.str16 = internal constant [2 x i8] c"\0A\00"
-@.str17 = internal constant [10 x i8] c"Removed: \00"
+@.str17 = internal constant [17 x i8] c"Second element: \00"
 @.str18 = internal constant [2 x i8] c"\0A\00"
-@.str19 = internal constant [11 x i8] c"New size: \00"
+@.str19 = internal constant [16 x i8] c"Third element: \00"
 @.str20 = internal constant [2 x i8] c"\0A\00"
+@.str21 = internal constant [24 x i8] c"Removed first element: \00"
+@.str22 = internal constant [2 x i8] c"\0A\00"
+@.str23 = internal constant [16 x i8] c"New list size: \00"
+@.str24 = internal constant [2 x i8] c"\0A\00"
+@.str25 = internal constant [20 x i8] c"New first element: \00"
+@.str26 = internal constant [2 x i8] c"\0A\00"
+@.str27 = internal constant [15 x i8] c"List is empty\0A\00"
+@.str28 = internal constant [19 x i8] c"List is not empty\0A\00"
+@.str29 = internal constant [15 x i8] c"List is empty\0A\00"
+@.str30 = internal constant [19 x i8] c"List is not empty\0A\00"
 @.str.Object = constant [7 x i8] c"Object\00"
 @.str.fmt = global [3 x i8] c"%s\00"
 @.str.fmt.int = constant [3 x i8] c"%d\00"
@@ -221,21 +231,20 @@ declare i8* @strcat(i8* %dest, i8* %src)
 
 declare i8* @strncpy(i8* %dest, i8* %src, i32 %n)
 
-define %Node* @Node.init(%Node* %self, %Object* %value, %Node* %nextNode) {
+define %Node* @Node.init(%Node* %self, i32 %value, %Node* %nextNode) {
 entry:
 	%0 = getelementptr %Node, %Node* %self, i32 0, i32 1
-	store %Object* %value, %Object** %0
+	store i32 %value, i32* %0
 	%1 = getelementptr %Node, %Node* %self, i32 0, i32 2
 	store %Node* %nextNode, %Node** %1
 	ret %Node* %self
 }
 
-define %Object* @Node.getData(%Node* %self) {
+define i32 @Node.getData(%Node* %self) {
 entry:
 	%0 = getelementptr %Node, %Node* %self, i32 0, i32 1
-	%1 = load %Object*, %Object** %0
-	%2 = bitcast %Object* %1 to %Object*
-	ret %Object* %2
+	%1 = load i32, i32* %0
+	ret i32 %1
 }
 
 define %Node* @Node.getNext(%Node* %self) {
@@ -260,7 +269,7 @@ entry:
 	ret %LinkedList* %self
 }
 
-define %LinkedList* @LinkedList.addFirst(%LinkedList* %self, %Object* %value) {
+define %LinkedList* @LinkedList.addFirst(%LinkedList* %self, i32 %value) {
 entry:
 	%0 = alloca %Node*
 	%1 = getelementptr %Node, %Node* null, i32 1
@@ -271,7 +280,7 @@ entry:
 	%6 = bitcast [7 x i8*]* @vtable.Node to i8*
 	store i8* %6, i8** %5
 	%7 = getelementptr %Node, %Node* %4, i32 0, i32 1
-	store %Object* null, %Object** %7
+	store i32 0, i32* %7
 	%8 = getelementptr %Node, %Node* %4, i32 0, i32 2
 	store %Node* null, %Node** %8
 	store %Node* %4, %Node** %0
@@ -280,41 +289,40 @@ entry:
 	%11 = load %Node*, %Node** %10
 	%12 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 4
 	%13 = load i8*, i8** %12
-	%14 = bitcast i8* %13 to %Node* (%Node*, %Object*, %Node*)*
+	%14 = bitcast i8* %13 to %Node* (%Node*, i32, %Node*)*
 	%15 = bitcast %Node* %9 to %Node*
-	%16 = bitcast %Object* %value to %Object*
-	%17 = bitcast %Node* %11 to %Node*
-	%18 = call %Node* %14(%Node* %15, %Object* %16, %Node* %17)
-	%19 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 6
-	%20 = load i8*, i8** %19
-	%21 = bitcast i8* %20 to i1 (%LinkedList*)*
-	%22 = bitcast %LinkedList* %self to %LinkedList*
-	%23 = call i1 %21(%LinkedList* %22)
-	br i1 %23, label %if.then.1, label %if.else.1
+	%16 = bitcast %Node* %11 to %Node*
+	%17 = call %Node* %14(%Node* %15, i32 %value, %Node* %16)
+	%18 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 6
+	%19 = load i8*, i8** %18
+	%20 = bitcast i8* %19 to i1 (%LinkedList*)*
+	%21 = bitcast %LinkedList* %self to %LinkedList*
+	%22 = call i1 %20(%LinkedList* %21)
+	br i1 %22, label %if.then.1, label %if.else.1
 
 if.then.1:
-	%24 = load %Node*, %Node** %0
-	%25 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 2
-	store %Node* %24, %Node** %25
+	%23 = load %Node*, %Node** %0
+	%24 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 2
+	store %Node* %23, %Node** %24
 	br label %if.end.1
 
 if.else.1:
 	br label %if.end.1
 
 if.end.1:
-	%26 = phi %Node* [ %24, %if.then.1 ], [ null, %if.else.1 ]
-	%27 = load %Node*, %Node** %0
-	%28 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
-	store %Node* %27, %Node** %28
-	%29 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	%30 = load i32, i32* %29
-	%31 = add i32 %30, 1
-	%32 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	store i32 %31, i32* %32
+	%25 = phi %Node* [ %23, %if.then.1 ], [ null, %if.else.1 ]
+	%26 = load %Node*, %Node** %0
+	%27 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
+	store %Node* %26, %Node** %27
+	%28 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
+	%29 = load i32, i32* %28
+	%30 = add i32 %29, 1
+	%31 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
+	store i32 %30, i32* %31
 	ret %LinkedList* %self
 }
 
-define %LinkedList* @LinkedList.addLast(%LinkedList* %self, %Object* %value) {
+define %LinkedList* @LinkedList.addLast(%LinkedList* %self, i32 %value) {
 entry:
 	%0 = alloca %Node*
 	%1 = getelementptr %Node, %Node* null, i32 1
@@ -325,7 +333,7 @@ entry:
 	%6 = bitcast [7 x i8*]* @vtable.Node to i8*
 	store i8* %6, i8** %5
 	%7 = getelementptr %Node, %Node* %4, i32 0, i32 1
-	store %Object* null, %Object** %7
+	store i32 0, i32* %7
 	%8 = getelementptr %Node, %Node* %4, i32 0, i32 2
 	store %Node* null, %Node** %8
 	store %Node* %4, %Node** %0
@@ -333,62 +341,61 @@ entry:
 	%10 = load %Node*, %Node** %0
 	%11 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 4
 	%12 = load i8*, i8** %11
-	%13 = bitcast i8* %12 to %Node* (%Node*, %Object*, %Node*)*
+	%13 = bitcast i8* %12 to %Node* (%Node*, i32, %Node*)*
 	%14 = bitcast %Node* %9 to %Node*
-	%15 = bitcast %Object* %value to %Object*
-	%16 = bitcast %Node* %10 to %Node*
-	%17 = call %Node* %13(%Node* %14, %Object* %15, %Node* %16)
-	%18 = alloca %Node*
-	store %Node* null, %Node** %18
-	%19 = load %Node*, %Node** %0
-	%20 = load %Node*, %Node** %18
-	%21 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 5
-	%22 = load i8*, i8** %21
-	%23 = bitcast i8* %22 to %Node* (%Node*, %Node*)*
+	%15 = bitcast %Node* %10 to %Node*
+	%16 = call %Node* %13(%Node* %14, i32 %value, %Node* %15)
+	%17 = alloca %Node*
+	store %Node* null, %Node** %17
+	%18 = load %Node*, %Node** %0
+	%19 = load %Node*, %Node** %17
+	%20 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 5
+	%21 = load i8*, i8** %20
+	%22 = bitcast i8* %21 to %Node* (%Node*, %Node*)*
+	%23 = bitcast %Node* %18 to %Node*
 	%24 = bitcast %Node* %19 to %Node*
-	%25 = bitcast %Node* %20 to %Node*
-	%26 = call %Node* %23(%Node* %24, %Node* %25)
-	%27 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 6
-	%28 = load i8*, i8** %27
-	%29 = bitcast i8* %28 to i1 (%LinkedList*)*
-	%30 = bitcast %LinkedList* %self to %LinkedList*
-	%31 = call i1 %29(%LinkedList* %30)
-	br i1 %31, label %if.then.2, label %if.else.2
+	%25 = call %Node* %22(%Node* %23, %Node* %24)
+	%26 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 6
+	%27 = load i8*, i8** %26
+	%28 = bitcast i8* %27 to i1 (%LinkedList*)*
+	%29 = bitcast %LinkedList* %self to %LinkedList*
+	%30 = call i1 %28(%LinkedList* %29)
+	br i1 %30, label %if.then.2, label %if.else.2
 
 if.then.2:
-	%32 = load %Node*, %Node** %0
-	%33 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
-	store %Node* %32, %Node** %33
+	%31 = load %Node*, %Node** %0
+	%32 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
+	store %Node* %31, %Node** %32
 	br label %if.end.2
 
 if.else.2:
-	%34 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 2
-	%35 = load %Node*, %Node** %34
-	%36 = load %Node*, %Node** %0
-	%37 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 5
-	%38 = load i8*, i8** %37
-	%39 = bitcast i8* %38 to %Node* (%Node*, %Node*)*
+	%33 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 2
+	%34 = load %Node*, %Node** %33
+	%35 = load %Node*, %Node** %0
+	%36 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 5
+	%37 = load i8*, i8** %36
+	%38 = bitcast i8* %37 to %Node* (%Node*, %Node*)*
+	%39 = bitcast %Node* %34 to %Node*
 	%40 = bitcast %Node* %35 to %Node*
-	%41 = bitcast %Node* %36 to %Node*
-	%42 = call %Node* %39(%Node* %40, %Node* %41)
+	%41 = call %Node* %38(%Node* %39, %Node* %40)
 	br label %if.end.2
 
 if.end.2:
-	%43 = phi %Node* [ %32, %if.then.2 ], [ %42, %if.else.2 ]
-	%44 = load %Node*, %Node** %0
-	%45 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 2
-	store %Node* %44, %Node** %45
-	%46 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	%47 = load i32, i32* %46
-	%48 = add i32 %47, 1
-	%49 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	store i32 %48, i32* %49
+	%42 = phi %Node* [ %31, %if.then.2 ], [ %41, %if.else.2 ]
+	%43 = load %Node*, %Node** %0
+	%44 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 2
+	store %Node* %43, %Node** %44
+	%45 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
+	%46 = load i32, i32* %45
+	%47 = add i32 %46, 1
+	%48 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
+	store i32 %47, i32* %48
 	ret %LinkedList* %self
 }
 
-define %Object* @LinkedList.removeFirst(%LinkedList* %self) {
+define i32 @LinkedList.removeFirst(%LinkedList* %self) {
 entry:
-	%0 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 6
+	%0 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 6
 	%1 = load i8*, i8** %0
 	%2 = bitcast i8* %1 to i1 (%LinkedList*)*
 	%3 = bitcast %LinkedList* %self to %LinkedList*
@@ -396,303 +403,162 @@ entry:
 	br i1 %4, label %if.then.3, label %if.else.3
 
 if.then.3:
-	%5 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 4
-	%6 = load %IO*, %IO** %5
-	%7 = bitcast i8* getelementptr ([41 x i8], [41 x i8]* @.str9, i32 0, i32 0) to i8*
-	%8 = call %IO* @IO.out_string(%IO* %6, i8* %7)
-	%9 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 0
-	%10 = load i8*, i8** %9
-	%11 = bitcast i8* %10 to %Object* (%Object*)*
-	%12 = bitcast %LinkedList* %self to %Object*
-	%13 = call %Object* %11(%Object* %12)
-	%14 = getelementptr %Object, %Object* null, i32 1
-	%15 = ptrtoint %Object* %14 to i64
-	%16 = call i8* @malloc(i64 %15)
-	%17 = bitcast i8* %16 to %Object*
-	%18 = getelementptr %Object, %Object* %17, i32 0, i32 0
-	%19 = bitcast [3 x i8*]* @vtable.Object to i8*
-	store i8* %19, i8** %18
+	%5 = getelementptr %IO, %IO* null, i32 1
+	%6 = ptrtoint %IO* %5 to i64
+	%7 = call i8* @malloc(i64 %6)
+	%8 = bitcast i8* %7 to %IO*
+	%9 = getelementptr %IO, %IO* %8, i32 0, i32 0
+	%10 = bitcast [7 x i8*]* @vtable.IO to i8*
+	store i8* %10, i8** %9
+	%11 = bitcast i8* getelementptr ([41 x i8], [41 x i8]* @.str9, i32 0, i32 0) to i8*
+	%12 = call %IO* @IO.out_string(%IO* %8, i8* %11)
+	%13 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 0
+	%14 = load i8*, i8** %13
+	%15 = bitcast i8* %14 to %Object* (%Object*)*
+	%16 = bitcast %LinkedList* %self to %Object*
+	%17 = call %Object* %15(%Object* %16)
 	br label %if.end.3
 
 if.else.3:
-	%20 = alloca %Object*
-	%21 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
-	%22 = load %Node*, %Node** %21
-	%23 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 2
-	%24 = load i8*, i8** %23
-	%25 = bitcast i8* %24 to %Object* (%Node*)*
-	%26 = bitcast %Node* %22 to %Node*
-	%27 = call %Object* %25(%Node* %26)
-	store %Object* %27, %Object** %20
-	%28 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
-	%29 = load %Node*, %Node** %28
-	%30 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 3
-	%31 = load i8*, i8** %30
-	%32 = bitcast i8* %31 to %Node* (%Node*)*
-	%33 = bitcast %Node* %29 to %Node*
-	%34 = call %Node* %32(%Node* %33)
-	%35 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
-	store %Node* %34, %Node** %35
-	%36 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	%37 = load i32, i32* %36
-	%38 = sub i32 %37, 1
-	%39 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	store i32 %38, i32* %39
-	%40 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 6
-	%41 = load i8*, i8** %40
-	%42 = bitcast i8* %41 to i1 (%LinkedList*)*
-	%43 = bitcast %LinkedList* %self to %LinkedList*
-	%44 = call i1 %42(%LinkedList* %43)
-	br i1 %44, label %if.then.4, label %if.else.4
+	%18 = alloca i32
+	%19 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
+	%20 = load %Node*, %Node** %19
+	%21 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 2
+	%22 = load i8*, i8** %21
+	%23 = bitcast i8* %22 to i32 (%Node*)*
+	%24 = bitcast %Node* %20 to %Node*
+	%25 = call i32 %23(%Node* %24)
+	store i32 %25, i32* %18
+	%26 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
+	%27 = load %Node*, %Node** %26
+	%28 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 3
+	%29 = load i8*, i8** %28
+	%30 = bitcast i8* %29 to %Node* (%Node*)*
+	%31 = bitcast %Node* %27 to %Node*
+	%32 = call %Node* %30(%Node* %31)
+	%33 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
+	store %Node* %32, %Node** %33
+	%34 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
+	%35 = load i32, i32* %34
+	%36 = sub i32 %35, 1
+	%37 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
+	store i32 %36, i32* %37
+	%38 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 6
+	%39 = load i8*, i8** %38
+	%40 = bitcast i8* %39 to i1 (%LinkedList*)*
+	%41 = bitcast %LinkedList* %self to %LinkedList*
+	%42 = call i1 %40(%LinkedList* %41)
+	br i1 %42, label %if.then.4, label %if.else.4
 
 if.end.3:
-	%45 = phi %Object* [ %17, %if.then.3 ], [ %51, %if.end.4 ]
-	%46 = bitcast %Object* %45 to %Object*
-	ret %Object* %46
+	%43 = phi i32 [ 0, %if.then.3 ], [ %48, %if.end.4 ]
+	ret i32 %43
 
 if.then.4:
-	%47 = alloca %Node*
-	store %Node* null, %Node** %47
-	%48 = load %Node*, %Node** %47
-	%49 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 2
-	store %Node* %48, %Node** %49
+	%44 = alloca %Node*
+	store %Node* null, %Node** %44
+	%45 = load %Node*, %Node** %44
+	%46 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 2
+	store %Node* %45, %Node** %46
 	br label %if.end.4
 
 if.else.4:
 	br label %if.end.4
 
 if.end.4:
-	%50 = phi %Node* [ %48, %if.then.4 ], [ null, %if.else.4 ]
-	%51 = load %Object*, %Object** %20
+	%47 = phi %Node* [ %45, %if.then.4 ], [ null, %if.else.4 ]
+	%48 = load i32, i32* %18
 	br label %if.end.3
 }
 
-define %Object* @LinkedList.removeLast(%LinkedList* %self) {
+define i32 @LinkedList.get(%LinkedList* %self, i32 %index) {
 entry:
-	%0 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 6
-	%1 = load i8*, i8** %0
-	%2 = bitcast i8* %1 to i1 (%LinkedList*)*
-	%3 = bitcast %LinkedList* %self to %LinkedList*
-	%4 = call i1 %2(%LinkedList* %3)
-	br i1 %4, label %if.then.5, label %if.else.5
+	%0 = icmp slt i32 %index, 0
+	br i1 %0, label %if.then.5, label %if.else.5
 
 if.then.5:
-	%5 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 4
-	%6 = load %IO*, %IO** %5
-	%7 = bitcast i8* getelementptr ([41 x i8], [41 x i8]* @.str10, i32 0, i32 0) to i8*
-	%8 = call %IO* @IO.out_string(%IO* %6, i8* %7)
-	%9 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 0
+	%1 = getelementptr %IO, %IO* null, i32 1
+	%2 = ptrtoint %IO* %1 to i64
+	%3 = call i8* @malloc(i64 %2)
+	%4 = bitcast i8* %3 to %IO*
+	%5 = getelementptr %IO, %IO* %4, i32 0, i32 0
+	%6 = bitcast [7 x i8*]* @vtable.IO to i8*
+	store i8* %6, i8** %5
+	%7 = bitcast i8* getelementptr ([45 x i8], [45 x i8]* @.str10, i32 0, i32 0) to i8*
+	%8 = call %IO* @IO.out_string(%IO* %4, i8* %7)
+	%9 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 0
 	%10 = load i8*, i8** %9
 	%11 = bitcast i8* %10 to %Object* (%Object*)*
 	%12 = bitcast %LinkedList* %self to %Object*
 	%13 = call %Object* %11(%Object* %12)
-	%14 = getelementptr %Object, %Object* null, i32 1
-	%15 = ptrtoint %Object* %14 to i64
-	%16 = call i8* @malloc(i64 %15)
-	%17 = bitcast i8* %16 to %Object*
-	%18 = getelementptr %Object, %Object* %17, i32 0, i32 0
-	%19 = bitcast [3 x i8*]* @vtable.Object to i8*
-	store i8* %19, i8** %18
 	br label %if.end.5
 
 if.else.5:
-	%20 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	%21 = load i32, i32* %20
-	%22 = icmp eq i32 %21, 1
-	br i1 %22, label %if.then.6, label %if.else.6
+	%14 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
+	%15 = load i32, i32* %14
+	%16 = icmp sle i32 %15, %index
+	br i1 %16, label %if.then.6, label %if.else.6
 
 if.end.5:
-	%23 = phi %Object* [ %17, %if.then.5 ], [ %46, %if.end.6 ]
-	%24 = bitcast %Object* %23 to %Object*
-	ret %Object* %24
+	%17 = phi i32 [ 0, %if.then.5 ], [ %35, %if.end.6 ]
+	ret i32 %17
 
 if.then.6:
-	%25 = alloca %Object*
-	%26 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
-	%27 = load %Node*, %Node** %26
-	%28 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 2
-	%29 = load i8*, i8** %28
-	%30 = bitcast i8* %29 to %Object* (%Node*)*
-	%31 = bitcast %Node* %27 to %Node*
-	%32 = call %Object* %30(%Node* %31)
-	store %Object* %32, %Object** %25
-	%33 = alloca %Node*
-	store %Node* null, %Node** %33
-	%34 = load %Node*, %Node** %33
-	%35 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
-	store %Node* %34, %Node** %35
-	%36 = load %Node*, %Node** %33
-	%37 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 2
-	store %Node* %36, %Node** %37
-	%38 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	store i32 0, i32* %38
-	%39 = load %Object*, %Object** %25
+	%18 = getelementptr %IO, %IO* null, i32 1
+	%19 = ptrtoint %IO* %18 to i64
+	%20 = call i8* @malloc(i64 %19)
+	%21 = bitcast i8* %20 to %IO*
+	%22 = getelementptr %IO, %IO* %21, i32 0, i32 0
+	%23 = bitcast [7 x i8*]* @vtable.IO to i8*
+	store i8* %23, i8** %22
+	%24 = bitcast i8* getelementptr ([46 x i8], [46 x i8]* @.str11, i32 0, i32 0) to i8*
+	%25 = call %IO* @IO.out_string(%IO* %21, i8* %24)
+	%26 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 0
+	%27 = load i8*, i8** %26
+	%28 = bitcast i8* %27 to %Object* (%Object*)*
+	%29 = bitcast %LinkedList* %self to %Object*
+	%30 = call %Object* %28(%Object* %29)
 	br label %if.end.6
 
 if.else.6:
-	%40 = alloca %Node*
-	%41 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
-	%42 = load %Node*, %Node** %41
-	store %Node* %42, %Node** %40
-	%43 = alloca i32
-	store i32 0, i32* %43
-	%44 = alloca %Object*
-	store %Object* null, %Object** %44
-	%45 = alloca %Node*
-	store %Node* null, %Node** %45
+	%31 = alloca %Node*
+	%32 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
+	%33 = load %Node*, %Node** %32
+	store %Node* %33, %Node** %31
+	%34 = alloca i32
+	store i32 0, i32* %34
 	br label %while.cond.1
 
 if.end.6:
-	%46 = phi %Object* [ %39, %if.then.6 ], [ %85, %while.exit.1 ]
+	%35 = phi i32 [ 0, %if.then.6 ], [ %51, %while.exit.1 ]
 	br label %if.end.5
 
 while.cond.1:
-	%47 = load i32, i32* %43
-	%48 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	%49 = load i32, i32* %48
-	%50 = sub i32 %49, 2
-	%51 = icmp slt i32 %47, %50
-	br i1 %51, label %while.body.1, label %while.exit.1
+	%36 = load i32, i32* %34
+	%37 = icmp slt i32 %36, %index
+	br i1 %37, label %while.body.1, label %while.exit.1
 
 while.body.1:
-	%52 = load %Node*, %Node** %40
-	%53 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 3
-	%54 = load i8*, i8** %53
-	%55 = bitcast i8* %54 to %Node* (%Node*)*
-	%56 = bitcast %Node* %52 to %Node*
-	%57 = call %Node* %55(%Node* %56)
-	store %Node* %57, %Node** %40
-	%58 = load i32, i32* %43
-	%59 = add i32 %58, 1
-	store i32 %59, i32* %43
+	%38 = load %Node*, %Node** %31
+	%39 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 3
+	%40 = load i8*, i8** %39
+	%41 = bitcast i8* %40 to %Node* (%Node*)*
+	%42 = bitcast %Node* %38 to %Node*
+	%43 = call %Node* %41(%Node* %42)
+	store %Node* %43, %Node** %31
+	%44 = load i32, i32* %34
+	%45 = add i32 %44, 1
+	store i32 %45, i32* %34
 	br label %while.cond.1
 
 while.exit.1:
-	%60 = load %Node*, %Node** %40
-	%61 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 3
-	%62 = load i8*, i8** %61
-	%63 = bitcast i8* %62 to %Node* (%Node*)*
-	%64 = bitcast %Node* %60 to %Node*
-	%65 = call %Node* %63(%Node* %64)
-	%66 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 2
-	%67 = load i8*, i8** %66
-	%68 = bitcast i8* %67 to %Object* (%Node*)*
-	%69 = bitcast %Node* %65 to %Node*
-	%70 = call %Object* %68(%Node* %69)
-	store %Object* %70, %Object** %44
-	%71 = load %Node*, %Node** %40
-	%72 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 2
-	store %Node* %71, %Node** %72
-	%73 = load %Node*, %Node** %40
-	%74 = load %Node*, %Node** %45
-	%75 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 5
-	%76 = load i8*, i8** %75
-	%77 = bitcast i8* %76 to %Node* (%Node*, %Node*)*
-	%78 = bitcast %Node* %73 to %Node*
-	%79 = bitcast %Node* %74 to %Node*
-	%80 = call %Node* %77(%Node* %78, %Node* %79)
-	%81 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	%82 = load i32, i32* %81
-	%83 = sub i32 %82, 1
-	%84 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	store i32 %83, i32* %84
-	%85 = load %Object*, %Object** %44
+	%46 = load %Node*, %Node** %31
+	%47 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 2
+	%48 = load i8*, i8** %47
+	%49 = bitcast i8* %48 to i32 (%Node*)*
+	%50 = bitcast %Node* %46 to %Node*
+	%51 = call i32 %49(%Node* %50)
 	br label %if.end.6
-}
-
-define %Object* @LinkedList.get(%LinkedList* %self, i32 %index) {
-entry:
-	%0 = icmp slt i32 %index, 0
-	br i1 %0, label %if.then.7, label %if.else.7
-
-if.then.7:
-	%1 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 4
-	%2 = load %IO*, %IO** %1
-	%3 = bitcast i8* getelementptr ([45 x i8], [45 x i8]* @.str11, i32 0, i32 0) to i8*
-	%4 = call %IO* @IO.out_string(%IO* %2, i8* %3)
-	%5 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 0
-	%6 = load i8*, i8** %5
-	%7 = bitcast i8* %6 to %Object* (%Object*)*
-	%8 = bitcast %LinkedList* %self to %Object*
-	%9 = call %Object* %7(%Object* %8)
-	%10 = getelementptr %Object, %Object* null, i32 1
-	%11 = ptrtoint %Object* %10 to i64
-	%12 = call i8* @malloc(i64 %11)
-	%13 = bitcast i8* %12 to %Object*
-	%14 = getelementptr %Object, %Object* %13, i32 0, i32 0
-	%15 = bitcast [3 x i8*]* @vtable.Object to i8*
-	store i8* %15, i8** %14
-	br label %if.end.7
-
-if.else.7:
-	%16 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 3
-	%17 = load i32, i32* %16
-	%18 = icmp sle i32 %17, %index
-	br i1 %18, label %if.then.8, label %if.else.8
-
-if.end.7:
-	%19 = phi %Object* [ %13, %if.then.7 ], [ %40, %if.end.8 ]
-	%20 = bitcast %Object* %19 to %Object*
-	ret %Object* %20
-
-if.then.8:
-	%21 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 4
-	%22 = load %IO*, %IO** %21
-	%23 = bitcast i8* getelementptr ([46 x i8], [46 x i8]* @.str12, i32 0, i32 0) to i8*
-	%24 = call %IO* @IO.out_string(%IO* %22, i8* %23)
-	%25 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 0
-	%26 = load i8*, i8** %25
-	%27 = bitcast i8* %26 to %Object* (%Object*)*
-	%28 = bitcast %LinkedList* %self to %Object*
-	%29 = call %Object* %27(%Object* %28)
-	%30 = getelementptr %Object, %Object* null, i32 1
-	%31 = ptrtoint %Object* %30 to i64
-	%32 = call i8* @malloc(i64 %31)
-	%33 = bitcast i8* %32 to %Object*
-	%34 = getelementptr %Object, %Object* %33, i32 0, i32 0
-	%35 = bitcast [3 x i8*]* @vtable.Object to i8*
-	store i8* %35, i8** %34
-	br label %if.end.8
-
-if.else.8:
-	%36 = alloca %Node*
-	%37 = getelementptr %LinkedList, %LinkedList* %self, i32 0, i32 1
-	%38 = load %Node*, %Node** %37
-	store %Node* %38, %Node** %36
-	%39 = alloca i32
-	store i32 0, i32* %39
-	br label %while.cond.2
-
-if.end.8:
-	%40 = phi %Object* [ %33, %if.then.8 ], [ %56, %while.exit.2 ]
-	br label %if.end.7
-
-while.cond.2:
-	%41 = load i32, i32* %39
-	%42 = icmp slt i32 %41, %index
-	br i1 %42, label %while.body.2, label %while.exit.2
-
-while.body.2:
-	%43 = load %Node*, %Node** %36
-	%44 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 3
-	%45 = load i8*, i8** %44
-	%46 = bitcast i8* %45 to %Node* (%Node*)*
-	%47 = bitcast %Node* %43 to %Node*
-	%48 = call %Node* %46(%Node* %47)
-	store %Node* %48, %Node** %36
-	%49 = load i32, i32* %39
-	%50 = add i32 %49, 1
-	store i32 %50, i32* %39
-	br label %while.cond.2
-
-while.exit.2:
-	%51 = load %Node*, %Node** %36
-	%52 = getelementptr [7 x i8*], [7 x i8*]* @vtable.Node, i32 0, i32 2
-	%53 = load i8*, i8** %52
-	%54 = bitcast i8* %53 to %Object* (%Node*)*
-	%55 = bitcast %Node* %51 to %Node*
-	%56 = call %Object* %54(%Node* %55)
-	br label %if.end.8
 }
 
 define i32 @LinkedList.size(%LinkedList* %self) {
@@ -718,7 +584,7 @@ entry:
 	%3 = call i8* @malloc(i64 %2)
 	%4 = bitcast i8* %3 to %LinkedList*
 	%5 = getelementptr %LinkedList, %LinkedList* %4, i32 0, i32 0
-	%6 = bitcast [11 x i8*]* @vtable.LinkedList to i8*
+	%6 = bitcast [10 x i8*]* @vtable.LinkedList to i8*
 	store i8* %6, i8** %5
 	%7 = getelementptr %LinkedList, %LinkedList* %4, i32 0, i32 1
 	store %Node* null, %Node** %7
@@ -726,159 +592,268 @@ entry:
 	store %Node* null, %Node** %8
 	%9 = getelementptr %LinkedList, %LinkedList* %4, i32 0, i32 3
 	store i32 0, i32* %9
-	%10 = getelementptr %LinkedList, %LinkedList* %4, i32 0, i32 4
-	%11 = getelementptr %IO, %IO* null, i32 1
-	%12 = ptrtoint %IO* %11 to i64
-	%13 = call i8* @malloc(i64 %12)
-	%14 = bitcast i8* %13 to %IO*
-	%15 = getelementptr %IO, %IO* %14, i32 0, i32 0
-	%16 = bitcast [7 x i8*]* @vtable.IO to i8*
-	store i8* %16, i8** %15
-	store %IO* %14, %IO** %10
 	store %LinkedList* %4, %LinkedList** %0
-	%17 = alloca %IO*
-	%18 = getelementptr %IO, %IO* null, i32 1
-	%19 = ptrtoint %IO* %18 to i64
-	%20 = call i8* @malloc(i64 %19)
-	%21 = bitcast i8* %20 to %IO*
-	%22 = getelementptr %IO, %IO* %21, i32 0, i32 0
-	%23 = bitcast [7 x i8*]* @vtable.IO to i8*
-	store i8* %23, i8** %22
-	store %IO* %21, %IO** %17
-	%24 = load %LinkedList*, %LinkedList** %0
-	%25 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 5
-	%26 = load i8*, i8** %25
-	%27 = bitcast i8* %26 to %LinkedList* (%LinkedList*)*
-	%28 = bitcast %LinkedList* %24 to %LinkedList*
-	%29 = call %LinkedList* %27(%LinkedList* %28)
-	%30 = load %LinkedList*, %LinkedList** %0
-	%31 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 1
-	%32 = load i8*, i8** %31
-	%33 = bitcast i8* %32 to %LinkedList* (%LinkedList*, %Object*)*
-	%34 = bitcast %LinkedList* %30 to %LinkedList*
-	%35 = inttoptr i32 100 to i8*
-	%36 = bitcast i8* %35 to %Object*
-	%37 = call %LinkedList* %33(%LinkedList* %34, %Object* %36)
-	%38 = load %LinkedList*, %LinkedList** %0
-	%39 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 2
-	%40 = load i8*, i8** %39
-	%41 = bitcast i8* %40 to %LinkedList* (%LinkedList*, %Object*)*
-	%42 = bitcast %LinkedList* %38 to %LinkedList*
-	%43 = inttoptr i32 200 to i8*
-	%44 = bitcast i8* %43 to %Object*
-	%45 = call %LinkedList* %41(%LinkedList* %42, %Object* %44)
+	%10 = load %LinkedList*, %LinkedList** %0
+	%11 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 5
+	%12 = load i8*, i8** %11
+	%13 = bitcast i8* %12 to %LinkedList* (%LinkedList*)*
+	%14 = bitcast %LinkedList* %10 to %LinkedList*
+	%15 = call %LinkedList* %13(%LinkedList* %14)
+	%16 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%17 = load i8*, i8** %16
+	%18 = bitcast i8* %17 to %IO* (%IO*, i8*)*
+	%19 = bitcast %Main* %self to %IO*
+	%20 = bitcast i8* getelementptr ([26 x i8], [26 x i8]* @.str12, i32 0, i32 0) to i8*
+	%21 = call %IO* %18(%IO* %19, i8* %20)
+	%22 = load %LinkedList*, %LinkedList** %0
+	%23 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 1
+	%24 = load i8*, i8** %23
+	%25 = bitcast i8* %24 to %LinkedList* (%LinkedList*, i32)*
+	%26 = bitcast %LinkedList* %22 to %LinkedList*
+	%27 = call %LinkedList* %25(%LinkedList* %26, i32 100)
+	%28 = load %LinkedList*, %LinkedList** %0
+	%29 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 2
+	%30 = load i8*, i8** %29
+	%31 = bitcast i8* %30 to %LinkedList* (%LinkedList*, i32)*
+	%32 = bitcast %LinkedList* %28 to %LinkedList*
+	%33 = call %LinkedList* %31(%LinkedList* %32, i32 200)
+	%34 = load %LinkedList*, %LinkedList** %0
+	%35 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 1
+	%36 = load i8*, i8** %35
+	%37 = bitcast i8* %36 to %LinkedList* (%LinkedList*, i32)*
+	%38 = bitcast %LinkedList* %34 to %LinkedList*
+	%39 = call %LinkedList* %37(%LinkedList* %38, i32 50)
+	%40 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%41 = load i8*, i8** %40
+	%42 = bitcast i8* %41 to %IO* (%IO*, i8*)*
+	%43 = bitcast %Main* %self to %IO*
+	%44 = bitcast i8* getelementptr ([12 x i8], [12 x i8]* @.str13, i32 0, i32 0) to i8*
+	%45 = call %IO* %42(%IO* %43, i8* %44)
 	%46 = load %LinkedList*, %LinkedList** %0
-	%47 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 1
+	%47 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 8
 	%48 = load i8*, i8** %47
-	%49 = bitcast i8* %48 to %LinkedList* (%LinkedList*, %Object*)*
+	%49 = bitcast i8* %48 to i32 (%LinkedList*)*
 	%50 = bitcast %LinkedList* %46 to %LinkedList*
-	%51 = inttoptr i32 50 to i8*
-	%52 = bitcast i8* %51 to %Object*
-	%53 = call %LinkedList* %49(%LinkedList* %50, %Object* %52)
-	%54 = load %IO*, %IO** %17
-	%55 = bitcast i8* getelementptr ([12 x i8], [12 x i8]* @.str13, i32 0, i32 0) to i8*
-	%56 = call %IO* @IO.out_string(%IO* %54, i8* %55)
-	%57 = load %IO*, %IO** %17
-	%58 = load %LinkedList*, %LinkedList** %0
-	%59 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 9
-	%60 = load i8*, i8** %59
-	%61 = bitcast i8* %60 to i32 (%LinkedList*)*
-	%62 = bitcast %LinkedList* %58 to %LinkedList*
-	%63 = call i32 %61(%LinkedList* %62)
-	%64 = call %IO* @IO.out_int(%IO* %57, i32 %63)
-	%65 = load %IO*, %IO** %17
-	%66 = bitcast i8* getelementptr ([2 x i8], [2 x i8]* @.str14, i32 0, i32 0) to i8*
-	%67 = call %IO* @IO.out_string(%IO* %65, i8* %66)
-	%68 = load %IO*, %IO** %17
-	%69 = bitcast i8* getelementptr ([16 x i8], [16 x i8]* @.str15, i32 0, i32 0) to i8*
-	%70 = call %IO* @IO.out_string(%IO* %68, i8* %69)
-	%71 = load %IO*, %IO** %17
-	%72 = load %LinkedList*, %LinkedList** %0
-	%73 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 4
-	%74 = load i8*, i8** %73
-	%75 = bitcast i8* %74 to %Object* (%LinkedList*, i32)*
-	%76 = bitcast %LinkedList* %72 to %LinkedList*
-	%77 = call %Object* %75(%LinkedList* %76, i32 0)
-	%78 = icmp eq %Object* %77, null
-	%79 = call %IO* @IO.out_int(%IO* %71, i32 %81)
-	br i1 %78, label %case.nomatch.1, label %case.notnull.1
+	%51 = call i32 %49(%LinkedList* %50)
+	%52 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 5
+	%53 = load i8*, i8** %52
+	%54 = bitcast i8* %53 to %IO* (%IO*, i32)*
+	%55 = bitcast %Main* %self to %IO*
+	%56 = call %IO* %54(%IO* %55, i32 %51)
+	%57 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%58 = load i8*, i8** %57
+	%59 = bitcast i8* %58 to %IO* (%IO*, i8*)*
+	%60 = bitcast %Main* %self to %IO*
+	%61 = bitcast i8* getelementptr ([2 x i8], [2 x i8]* @.str14, i32 0, i32 0) to i8*
+	%62 = call %IO* %59(%IO* %60, i8* %61)
+	%63 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%64 = load i8*, i8** %63
+	%65 = bitcast i8* %64 to %IO* (%IO*, i8*)*
+	%66 = bitcast %Main* %self to %IO*
+	%67 = bitcast i8* getelementptr ([16 x i8], [16 x i8]* @.str15, i32 0, i32 0) to i8*
+	%68 = call %IO* %65(%IO* %66, i8* %67)
+	%69 = load %LinkedList*, %LinkedList** %0
+	%70 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 4
+	%71 = load i8*, i8** %70
+	%72 = bitcast i8* %71 to i32 (%LinkedList*, i32)*
+	%73 = bitcast %LinkedList* %69 to %LinkedList*
+	%74 = call i32 %72(%LinkedList* %73, i32 0)
+	%75 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 5
+	%76 = load i8*, i8** %75
+	%77 = bitcast i8* %76 to %IO* (%IO*, i32)*
+	%78 = bitcast %Main* %self to %IO*
+	%79 = call %IO* %77(%IO* %78, i32 %74)
+	%80 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%81 = load i8*, i8** %80
+	%82 = bitcast i8* %81 to %IO* (%IO*, i8*)*
+	%83 = bitcast %Main* %self to %IO*
+	%84 = bitcast i8* getelementptr ([2 x i8], [2 x i8]* @.str16, i32 0, i32 0) to i8*
+	%85 = call %IO* %82(%IO* %83, i8* %84)
+	%86 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%87 = load i8*, i8** %86
+	%88 = bitcast i8* %87 to %IO* (%IO*, i8*)*
+	%89 = bitcast %Main* %self to %IO*
+	%90 = bitcast i8* getelementptr ([17 x i8], [17 x i8]* @.str17, i32 0, i32 0) to i8*
+	%91 = call %IO* %88(%IO* %89, i8* %90)
+	%92 = load %LinkedList*, %LinkedList** %0
+	%93 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 4
+	%94 = load i8*, i8** %93
+	%95 = bitcast i8* %94 to i32 (%LinkedList*, i32)*
+	%96 = bitcast %LinkedList* %92 to %LinkedList*
+	%97 = call i32 %95(%LinkedList* %96, i32 1)
+	%98 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 5
+	%99 = load i8*, i8** %98
+	%100 = bitcast i8* %99 to %IO* (%IO*, i32)*
+	%101 = bitcast %Main* %self to %IO*
+	%102 = call %IO* %100(%IO* %101, i32 %97)
+	%103 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%104 = load i8*, i8** %103
+	%105 = bitcast i8* %104 to %IO* (%IO*, i8*)*
+	%106 = bitcast %Main* %self to %IO*
+	%107 = bitcast i8* getelementptr ([2 x i8], [2 x i8]* @.str18, i32 0, i32 0) to i8*
+	%108 = call %IO* %105(%IO* %106, i8* %107)
+	%109 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%110 = load i8*, i8** %109
+	%111 = bitcast i8* %110 to %IO* (%IO*, i8*)*
+	%112 = bitcast %Main* %self to %IO*
+	%113 = bitcast i8* getelementptr ([16 x i8], [16 x i8]* @.str19, i32 0, i32 0) to i8*
+	%114 = call %IO* %111(%IO* %112, i8* %113)
+	%115 = load %LinkedList*, %LinkedList** %0
+	%116 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 4
+	%117 = load i8*, i8** %116
+	%118 = bitcast i8* %117 to i32 (%LinkedList*, i32)*
+	%119 = bitcast %LinkedList* %115 to %LinkedList*
+	%120 = call i32 %118(%LinkedList* %119, i32 2)
+	%121 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 5
+	%122 = load i8*, i8** %121
+	%123 = bitcast i8* %122 to %IO* (%IO*, i32)*
+	%124 = bitcast %Main* %self to %IO*
+	%125 = call %IO* %123(%IO* %124, i32 %120)
+	%126 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%127 = load i8*, i8** %126
+	%128 = bitcast i8* %127 to %IO* (%IO*, i8*)*
+	%129 = bitcast %Main* %self to %IO*
+	%130 = bitcast i8* getelementptr ([2 x i8], [2 x i8]* @.str20, i32 0, i32 0) to i8*
+	%131 = call %IO* %128(%IO* %129, i8* %130)
+	%132 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%133 = load i8*, i8** %132
+	%134 = bitcast i8* %133 to %IO* (%IO*, i8*)*
+	%135 = bitcast %Main* %self to %IO*
+	%136 = bitcast i8* getelementptr ([24 x i8], [24 x i8]* @.str21, i32 0, i32 0) to i8*
+	%137 = call %IO* %134(%IO* %135, i8* %136)
+	%138 = load %LinkedList*, %LinkedList** %0
+	%139 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 7
+	%140 = load i8*, i8** %139
+	%141 = bitcast i8* %140 to i32 (%LinkedList*)*
+	%142 = bitcast %LinkedList* %138 to %LinkedList*
+	%143 = call i32 %141(%LinkedList* %142)
+	%144 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 5
+	%145 = load i8*, i8** %144
+	%146 = bitcast i8* %145 to %IO* (%IO*, i32)*
+	%147 = bitcast %Main* %self to %IO*
+	%148 = call %IO* %146(%IO* %147, i32 %143)
+	%149 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%150 = load i8*, i8** %149
+	%151 = bitcast i8* %150 to %IO* (%IO*, i8*)*
+	%152 = bitcast %Main* %self to %IO*
+	%153 = bitcast i8* getelementptr ([2 x i8], [2 x i8]* @.str22, i32 0, i32 0) to i8*
+	%154 = call %IO* %151(%IO* %152, i8* %153)
+	%155 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%156 = load i8*, i8** %155
+	%157 = bitcast i8* %156 to %IO* (%IO*, i8*)*
+	%158 = bitcast %Main* %self to %IO*
+	%159 = bitcast i8* getelementptr ([16 x i8], [16 x i8]* @.str23, i32 0, i32 0) to i8*
+	%160 = call %IO* %157(%IO* %158, i8* %159)
+	%161 = load %LinkedList*, %LinkedList** %0
+	%162 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 8
+	%163 = load i8*, i8** %162
+	%164 = bitcast i8* %163 to i32 (%LinkedList*)*
+	%165 = bitcast %LinkedList* %161 to %LinkedList*
+	%166 = call i32 %164(%LinkedList* %165)
+	%167 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 5
+	%168 = load i8*, i8** %167
+	%169 = bitcast i8* %168 to %IO* (%IO*, i32)*
+	%170 = bitcast %Main* %self to %IO*
+	%171 = call %IO* %169(%IO* %170, i32 %166)
+	%172 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%173 = load i8*, i8** %172
+	%174 = bitcast i8* %173 to %IO* (%IO*, i8*)*
+	%175 = bitcast %Main* %self to %IO*
+	%176 = bitcast i8* getelementptr ([2 x i8], [2 x i8]* @.str24, i32 0, i32 0) to i8*
+	%177 = call %IO* %174(%IO* %175, i8* %176)
+	%178 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%179 = load i8*, i8** %178
+	%180 = bitcast i8* %179 to %IO* (%IO*, i8*)*
+	%181 = bitcast %Main* %self to %IO*
+	%182 = bitcast i8* getelementptr ([20 x i8], [20 x i8]* @.str25, i32 0, i32 0) to i8*
+	%183 = call %IO* %180(%IO* %181, i8* %182)
+	%184 = load %LinkedList*, %LinkedList** %0
+	%185 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 4
+	%186 = load i8*, i8** %185
+	%187 = bitcast i8* %186 to i32 (%LinkedList*, i32)*
+	%188 = bitcast %LinkedList* %184 to %LinkedList*
+	%189 = call i32 %187(%LinkedList* %188, i32 0)
+	%190 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 5
+	%191 = load i8*, i8** %190
+	%192 = bitcast i8* %191 to %IO* (%IO*, i32)*
+	%193 = bitcast %Main* %self to %IO*
+	%194 = call %IO* %192(%IO* %193, i32 %189)
+	%195 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%196 = load i8*, i8** %195
+	%197 = bitcast i8* %196 to %IO* (%IO*, i8*)*
+	%198 = bitcast %Main* %self to %IO*
+	%199 = bitcast i8* getelementptr ([2 x i8], [2 x i8]* @.str26, i32 0, i32 0) to i8*
+	%200 = call %IO* %197(%IO* %198, i8* %199)
+	%201 = load %LinkedList*, %LinkedList** %0
+	%202 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 6
+	%203 = load i8*, i8** %202
+	%204 = bitcast i8* %203 to i1 (%LinkedList*)*
+	%205 = bitcast %LinkedList* %201 to %LinkedList*
+	%206 = call i1 %204(%LinkedList* %205)
+	br i1 %206, label %if.then.7, label %if.else.7
 
-case.end.1:
-	%80 = phi %Int* [ %97, %case.branch.0.1 ]
-	%81 = ptrtoint %Int* %80 to i32
-	%82 = load %IO*, %IO** %17
-	%83 = bitcast i8* getelementptr ([2 x i8], [2 x i8]* @.str16, i32 0, i32 0) to i8*
-	%84 = call %IO* @IO.out_string(%IO* %82, i8* %83)
-	%85 = load %IO*, %IO** %17
-	%86 = bitcast i8* getelementptr ([10 x i8], [10 x i8]* @.str17, i32 0, i32 0) to i8*
-	%87 = call %IO* @IO.out_string(%IO* %85, i8* %86)
-	%88 = load %IO*, %IO** %17
-	%89 = load %LinkedList*, %LinkedList** %0
-	%90 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 7
-	%91 = load i8*, i8** %90
-	%92 = bitcast i8* %91 to %Object* (%LinkedList*)*
-	%93 = bitcast %LinkedList* %89 to %LinkedList*
-	%94 = call %Object* %92(%LinkedList* %93)
-	%95 = icmp eq %Object* %94, null
-	%96 = call %IO* @IO.out_int(%IO* %88, i32 %99)
-	br i1 %95, label %case.nomatch.2, label %case.notnull.2
+if.then.7:
+	%207 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%208 = load i8*, i8** %207
+	%209 = bitcast i8* %208 to %IO* (%IO*, i8*)*
+	%210 = bitcast %Main* %self to %IO*
+	%211 = bitcast i8* getelementptr ([15 x i8], [15 x i8]* @.str27, i32 0, i32 0) to i8*
+	%212 = call %IO* %209(%IO* %210, i8* %211)
+	br label %if.end.7
 
-case.branch.0.1:
-	%97 = bitcast %Object* %77 to %Int*
-	br label %case.end.1
+if.else.7:
+	%213 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%214 = load i8*, i8** %213
+	%215 = bitcast i8* %214 to %IO* (%IO*, i8*)*
+	%216 = bitcast %Main* %self to %IO*
+	%217 = bitcast i8* getelementptr ([19 x i8], [19 x i8]* @.str28, i32 0, i32 0) to i8*
+	%218 = call %IO* %215(%IO* %216, i8* %217)
+	br label %if.end.7
 
-case.nomatch.1:
-	call void @exit(i32 1)
-	unreachable
+if.end.7:
+	%219 = phi %IO* [ %212, %if.then.7 ], [ %218, %if.else.7 ]
+	%220 = load %LinkedList*, %LinkedList** %0
+	%221 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 7
+	%222 = load i8*, i8** %221
+	%223 = bitcast i8* %222 to i32 (%LinkedList*)*
+	%224 = bitcast %LinkedList* %220 to %LinkedList*
+	%225 = call i32 %223(%LinkedList* %224)
+	%226 = load %LinkedList*, %LinkedList** %0
+	%227 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 7
+	%228 = load i8*, i8** %227
+	%229 = bitcast i8* %228 to i32 (%LinkedList*)*
+	%230 = bitcast %LinkedList* %226 to %LinkedList*
+	%231 = call i32 %229(%LinkedList* %230)
+	%232 = load %LinkedList*, %LinkedList** %0
+	%233 = getelementptr [10 x i8*], [10 x i8*]* @vtable.LinkedList, i32 0, i32 6
+	%234 = load i8*, i8** %233
+	%235 = bitcast i8* %234 to i1 (%LinkedList*)*
+	%236 = bitcast %LinkedList* %232 to %LinkedList*
+	%237 = call i1 %235(%LinkedList* %236)
+	br i1 %237, label %if.then.8, label %if.else.8
 
-case.notnull.1:
-	br label %case.typecheck.1
+if.then.8:
+	%238 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%239 = load i8*, i8** %238
+	%240 = bitcast i8* %239 to %IO* (%IO*, i8*)*
+	%241 = bitcast %Main* %self to %IO*
+	%242 = bitcast i8* getelementptr ([15 x i8], [15 x i8]* @.str29, i32 0, i32 0) to i8*
+	%243 = call %IO* %240(%IO* %241, i8* %242)
+	br label %if.end.8
 
-case.typecheck.1:
-	br label %case.decision.0.1
+if.else.8:
+	%244 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 6
+	%245 = load i8*, i8** %244
+	%246 = bitcast i8* %245 to %IO* (%IO*, i8*)*
+	%247 = bitcast %Main* %self to %IO*
+	%248 = bitcast i8* getelementptr ([19 x i8], [19 x i8]* @.str30, i32 0, i32 0) to i8*
+	%249 = call %IO* %246(%IO* %247, i8* %248)
+	br label %if.end.8
 
-case.decision.0.1:
-	br i1 false, label %case.branch.0.1, label %case.nomatch.1
-
-case.end.2:
-	%98 = phi %Int* [ %118, %case.branch.0.2 ]
-	%99 = ptrtoint %Int* %98 to i32
-	%100 = load %IO*, %IO** %17
-	%101 = bitcast i8* getelementptr ([2 x i8], [2 x i8]* @.str18, i32 0, i32 0) to i8*
-	%102 = call %IO* @IO.out_string(%IO* %100, i8* %101)
-	%103 = load %IO*, %IO** %17
-	%104 = bitcast i8* getelementptr ([11 x i8], [11 x i8]* @.str19, i32 0, i32 0) to i8*
-	%105 = call %IO* @IO.out_string(%IO* %103, i8* %104)
-	%106 = load %IO*, %IO** %17
-	%107 = load %LinkedList*, %LinkedList** %0
-	%108 = getelementptr [11 x i8*], [11 x i8*]* @vtable.LinkedList, i32 0, i32 9
-	%109 = load i8*, i8** %108
-	%110 = bitcast i8* %109 to i32 (%LinkedList*)*
-	%111 = bitcast %LinkedList* %107 to %LinkedList*
-	%112 = call i32 %110(%LinkedList* %111)
-	%113 = call %IO* @IO.out_int(%IO* %106, i32 %112)
-	%114 = load %IO*, %IO** %17
-	%115 = bitcast i8* getelementptr ([2 x i8], [2 x i8]* @.str20, i32 0, i32 0) to i8*
-	%116 = call %IO* @IO.out_string(%IO* %114, i8* %115)
-	%117 = bitcast %IO* %114 to %Object*
-	ret %Object* %117
-
-case.branch.0.2:
-	%118 = bitcast %Object* %94 to %Int*
-	br label %case.end.2
-
-case.nomatch.2:
-	call void @exit(i32 1)
-	unreachable
-
-case.notnull.2:
-	br label %case.typecheck.2
-
-case.typecheck.2:
-	br label %case.decision.0.2
-
-case.decision.0.2:
-	br i1 false, label %case.branch.0.2, label %case.nomatch.2
+if.end.8:
+	%250 = phi %IO* [ %243, %if.then.8 ], [ %249, %if.else.8 ]
+	%251 = bitcast %IO* %250 to %Object*
+	ret %Object* %251
 }
 
 define i32 @main() {
@@ -888,11 +863,11 @@ entry:
 	%2 = call i8* @malloc(i64 %1)
 	%3 = bitcast i8* %2 to %Main*
 	%4 = getelementptr %Main, %Main* %3, i32 0, i32 0
-	%5 = bitcast [4 x i8*]* @vtable.Main to i8*
+	%5 = bitcast [8 x i8*]* @vtable.Main to i8*
 	store i8* %5, i8** %4
 	%6 = alloca %Main*
 	store %Main* %3, %Main** %6
-	%7 = getelementptr [4 x i8*], [4 x i8*]* @vtable.Main, i32 0, i32 2
+	%7 = getelementptr [8 x i8*], [8 x i8*]* @vtable.Main, i32 0, i32 4
 	%8 = load i8*, i8** %7
 	%9 = bitcast i8* %8 to i8* (%Main*)*
 	%10 = call i8* %9(%Main* %3)

@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"bytes"
+	"cool-compiler/ast"
 	"cool-compiler/lexer"
 	"cool-compiler/parser"
 	"os"
@@ -268,6 +269,35 @@ is_even(5):
       is_odd(4) returns false
     is_even(5) returns false`,
 		},
+		{
+			"Linkedlist",
+			"linkedlist.cl",
+			`Created a new LinkedList
+List size: 3
+First element: 50
+Second element: 100
+Third element: 200
+Removed first element: 50
+New list size: 2
+New first element: 100
+List is not empty
+List is empty`,
+		},
+	}
+
+	// First read the LinkedList implementation
+	linkedListPath := filepath.Join("..", "cool_stdlib", "linkedlist.cl")
+	stdlibInput, err := os.ReadFile(linkedListPath)
+	var stdlibProgram *ast.Program
+	if err != nil {
+		t.Logf("Warning: Failed to read LinkedList implementation: %v", err)
+		t.Logf("Continuing tests without LinkedList implementation")
+		stdlibProgram = &ast.Program{Classes: []*ast.Class{}}
+	} else {
+		// Parse the LinkedList implementation
+		stdlibLexer := lexer.NewLexer(strings.NewReader(string(stdlibInput)))
+		stdlibParser := parser.New(stdlibLexer)
+		stdlibProgram = stdlibParser.ParseProgram()
 	}
 
 	for _, example := range examples {
@@ -282,14 +312,19 @@ is_even(5):
 			// Parse the program
 			l := lexer.NewLexer(strings.NewReader(string(input)))
 			p := parser.New(l)
-			program := p.ParseProgram()
+			userProgram := p.ParseProgram()
 
 			if len(p.Errors()) != 0 {
 				t.Fatalf("Parser errors in %s: %v", example.filename, p.Errors())
 			}
 
+			// Merge with the LinkedList implementation
+			mergedProgram := &ast.Program{
+				Classes: append(stdlibProgram.Classes, userProgram.Classes...),
+			}
+
 			// Generate LLVM IR
-			module, err := Generate(program)
+			module, err := Generate(mergedProgram)
 			if err != nil {
 				t.Fatalf("Code generation error for %s: %v", example.filename, err)
 			}

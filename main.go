@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cool-compiler/ast"
 	"cool-compiler/codegen"
 	"cool-compiler/lexer"
 	"cool-compiler/parser"
@@ -20,26 +21,44 @@ func main() {
 		os.Exit(1)
 	}
 
-	input, err := os.ReadFile(os.Args[1])
+	userInput, err := os.ReadFile(os.Args[1])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 		os.Exit(1)
 	}
 
-	l := lexer.NewLexer(strings.NewReader(string(input)))
-	p := parser.New(l)
-	program := p.ParseProgram()
+	userLexer := lexer.NewLexer(strings.NewReader(string(userInput)))
+	userParser := parser.New(userLexer)
+	userProgram := userParser.ParseProgram()
 
-	if len(p.Errors()) != 0 {
+	if len(userParser.Errors()) != 0 {
 		fmt.Fprintf(os.Stderr, "Parser Errors:\n")
-		for _, msg := range p.Errors() {
+		for _, msg := range userParser.Errors() {
 			fmt.Fprintf(os.Stderr, "%s\n", msg)
 		}
 		os.Exit(1)
 	}
 
+	// Parse the LinkedList implementation separately
+	stdlibInput, err := os.ReadFile("cool_stdlib/linkedlist.cl")
+	var stdlibProgram *ast.Program
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to read LinkedList implementation: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Continuing without LinkedList implementation\n")
+		stdlibProgram = &ast.Program{Classes: []*ast.Class{}}
+	} else {
+		stdlibLexer := lexer.NewLexer(strings.NewReader(string(stdlibInput)))
+		stdlibParser := parser.New(stdlibLexer)
+		stdlibProgram = stdlibParser.ParseProgram()
+	}
+
+	// Merge the two ASTs
+	mergedProgram := &ast.Program{
+		Classes: append(stdlibProgram.Classes, userProgram.Classes...),
+	}
+
 	sa := semant.NewSemanticAnalyser()
-	sa.Analyze(program)
+	sa.Analyze(mergedProgram)
 
 	if len(sa.Errors()) != 0 {
 		fmt.Fprintf(os.Stderr, "Semantic Errors:\n")
@@ -50,7 +69,7 @@ func main() {
 	}
 
 	// Generate LLVM IR for the program
-	module, err := codegen.Generate(program)
+	module, err := codegen.Generate(mergedProgram)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Code generation error: %v\n", err)
 		os.Exit(1)
